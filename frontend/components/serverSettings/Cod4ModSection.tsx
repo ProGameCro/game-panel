@@ -46,7 +46,7 @@ const unquote = (value: string): string => {
   return trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"') ? trimmed.slice(1, -1).replace(/\\"/g, '"') : trimmed;
 };
 const cfgLine = (key: string) => new RegExp(`^\\s*${key}\\s*=\\s*(.*)$`, 'm');
-const readCfgValue = (content: string, key: string): string | null => {
+export const readCfgValue = (content: string, key: string): string | null => {
   const match = cfgLine(key).exec(content);
   return match ? unquote(match[1]) : null;
 };
@@ -108,12 +108,35 @@ const generatePassword = (): string => {
   return Array.from(bytes, (n) => PASSWORD_CHARS[n % PASSWORD_CHARS.length]).join('');
 };
 
-const readOptional = async (serverId: number, path: string): Promise<string | null> => {
+export const readOptional = async (serverId: number, path: string): Promise<string | null> => {
   try {
     return await apiClient.readServerFile(serverId, path);
   } catch {
     return null;
   }
+};
+
+/** Writes a server file, creating it when it does not exist yet (the update call only works on existing files). */
+export const writeServerFile = async (serverId: number, path: string, content: string): Promise<void> => {
+  try {
+    await apiClient.updateServerFile(serverId, path, content);
+  } catch (e) {
+    if ((e as { response?: { status?: number } })?.response?.status !== 404) throw e;
+    const at = path.lastIndexOf('/');
+    await apiClient.createServerFile(serverId, at >= 0 ? path.slice(0, at) : '/', path.slice(at + 1), content);
+  }
+};
+
+/** LinuxGSM config files of an instance, in the order LinuxGSM lets them override each other (last wins). */
+export const linuxGsmConfigPaths = (gameServerName: string) => {
+  const dir = `config-lgsm/${gameServerName}`;
+  return {
+    defaults: `${dir}/_default.cfg`,
+    common: `${dir}/common.cfg`,
+    secretsCommon: `${dir}/secrets-common.cfg`,
+    instance: `${dir}/${gameServerName}.cfg`,
+    secretsInstance: `${dir}/secrets-${gameServerName}.cfg`,
+  };
 };
 
 const validAsset = (value: string) => value === '' || (/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= ASSET_LIMIT);
@@ -165,17 +188,7 @@ export function Cod4ModSection({
   textPrimary,
   textSecondary,
 }: Cod4ModSectionProps) {
-  const configDir = `config-lgsm/${gameServerName}`;
-  const paths = useMemo(
-    () => ({
-      defaults: `${configDir}/_default.cfg`,
-      common: `${configDir}/common.cfg`,
-      secretsCommon: `${configDir}/secrets-common.cfg`,
-      instance: `${configDir}/${gameServerName}.cfg`,
-      secretsInstance: `${configDir}/secrets-${gameServerName}.cfg`,
-    }),
-    [configDir, gameServerName]
-  );
+  const paths = useMemo(() => linuxGsmConfigPaths(gameServerName), [gameServerName]);
   const modsPath = 'serverfiles/mods';
 
   const [loading, setLoading] = useState(true);
@@ -282,8 +295,8 @@ export function Cod4ModSection({
       // the RCON password lives only in the command line now
       secrets = removeCfgKey(secrets, 'rconpassword');
       const instance = upsertCfgValue(instanceContent, 'startparameters', preview);
-      if (secrets !== secretsContent) await apiClient.updateServerFile(serverId, paths.secretsCommon, secrets);
-      await apiClient.updateServerFile(serverId, paths.instance, instance);
+      if (secrets !== secretsContent) await writeServerFile(serverId, paths.secretsCommon, secrets);
+      await writeServerFile(serverId, paths.instance, instance);
       setSaved(true);
       await load();
     } catch (e) {

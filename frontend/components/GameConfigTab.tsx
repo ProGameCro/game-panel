@@ -11,6 +11,7 @@ import { GarrysModSections, type GarrysModSectionsProps } from './serverSettings
 import { RustSections, type RustSectionsProps } from './serverSettings/RustTab';
 import { ValheimSections, type ValheimSectionsProps } from './serverSettings/ValheimTab';
 import { Cod4ModSection, type Cod4ModSectionProps } from './serverSettings/Cod4ModSection';
+import { B3Section } from './serverSettings/B3Section';
 import { AppButton, AppInput, AppSelect, AppSlider, AppToggle, InfoTip } from '../src/ui/components';
 import {
   type CatalogGameDefinition,
@@ -1001,6 +1002,12 @@ export function GameConfigTab({
           {cod4Props && (
             <div className="px-1 sm:px-2">
               <Cod4ModSection
+                {...cod4Props}
+                canReadFileManager={canReadFileManager}
+                canWriteFileManager={canWriteFileManager}
+                onOpenFileManagerPath={onOpenFileManagerPath ? openFileInFileManager : undefined}
+              />
+              <B3Section
                 {...cod4Props}
                 canReadFileManager={canReadFileManager}
                 canWriteFileManager={canWriteFileManager}
