@@ -119,7 +119,7 @@ temp_banned: $clientname^7 was temp banned for $banduration^7 $reason
 unbanned_by: $clientname^7 was un-banned by $adminname^7 $reason
 unbanned: $clientname^7 was un-banned^7 $reason
 
-# plugin configs of the built-in B3; to change one, copy it to b3/conf and point the line to /data/b3/conf/...
+# @b3 is your B3 in b3/app/b3, so these plugin configs are the files in b3/app/b3/conf
 [plugins]
 admin: @b3/conf/plugin_admin.ini
 adv: @b3/conf/plugin_adv.xml
@@ -144,9 +144,9 @@ conf/        your b3.ini or b3.xml and the plugin configs
 parsers/     your parser files (.py), for example cod4x.py -> "parser: cod4x"
 extplugins/  your plugins (.py files or folders)
 logs/        console.log (B3 output)
-app/         optional: your own complete B3 (the folder with b3_run.py). When it is here it is used
-             instead of the built-in B3 1.12; its requirements.txt is installed automatically.
-             Configs can then also stay in app/b3/conf.
+app/         your B3 (big-brother-bot-master.zip, put here by Install B3). This B3 is what runs:
+             edit its files here, e.g. plugins in app/b3/extplugins and plugin configs in app/b3/conf.
+             You can also replace it with another B3 (the folder with b3_run.py).
 
 Inside B3 this server folder is /data, for example:
   game_log: /data/serverfiles/main/games_mp.log
@@ -324,18 +324,33 @@ export function B3Section({
         await apiClient.createServerDirectory(serverId, B3_DIR, folder).catch(() => undefined);
       }
       await writeServerFile(serverId, `${B3_DIR}/README.txt`, README);
-      // a ready b3.ini, unless the user already has a config; the database name comes from the service (a few seconds)
-      if (!(await readOptional(serverId, `${B3_DIR}/conf/b3.ini`)) && !(await readOptional(serverId, `${B3_DIR}/conf/b3.xml`))) {
-        let database = '';
-        for (let i = 0; i < 8 && !database; i += 1) {
-          await new Promise((resolve) => window.setTimeout(resolve, 1500));
-          try {
-            database = (JSON.parse((await readOptional(serverId, `${B3_DIR}/status.json`)) ?? '{}') as Partial<B3Status>).database?.url ?? '';
-          } catch {
-            database = '';
-          }
+      const wait = () => new Promise((resolve) => window.setTimeout(resolve, 1500));
+      const readStatus = async (): Promise<Partial<B3Status>> => {
+        try {
+          return JSON.parse((await readOptional(serverId, `${B3_DIR}/status.json`)) ?? '{}') as Partial<B3Status>;
+        } catch {
+          return {};
         }
-        await writeServerFile(serverId, `${B3_DIR}/conf/b3.ini`, defaultConfig({ ...server, database: database || DATABASE_PLACEHOLDER }));
+      };
+      // the service notices the new folder within a few seconds and reports the database
+      let current: Partial<B3Status> = {};
+      for (let i = 0; i < 8 && !current.database; i += 1) {
+        await wait();
+        current = await readStatus();
+      }
+      if (current.heartbeat) {
+        // the service unpacks the bundled B3 (big-brother-bot zip) into b3/app, so its files can be seen and edited
+        const id = newId();
+        await writeServerFile(serverId, `${B3_DIR}/control.json`, `${JSON.stringify({ action: 'install', id }, null, 2)}\n`);
+        for (let i = 0; i < 30 && current.lastAction?.id !== id; i += 1) {
+          await wait();
+          current = await readStatus();
+        }
+        if (current.lastAction?.id === id && current.lastAction.result === 'error') throw new Error(current.lastAction.message ?? 'Install failed.');
+      }
+      // a ready b3.ini, unless the user already has a config
+      if (!(await readOptional(serverId, `${B3_DIR}/conf/b3.ini`)) && !(await readOptional(serverId, `${B3_DIR}/conf/b3.xml`))) {
+        await writeServerFile(serverId, `${B3_DIR}/conf/b3.ini`, defaultConfig({ ...server, database: current.database?.url || DATABASE_PLACEHOLDER }));
       }
       await load();
     } catch (e) {
@@ -531,7 +546,7 @@ export function B3Section({
               <span className={key}>B3</span>
               <span className={val}>
                 {appRoot
-                  ? `your own B3 from b3/${appRoot}`
+                  ? `your B3 in b3/${appRoot}`
                   : 'your B3 from big-brother-bot-master.zip (B3 1.12 + cod4x parser)'}
                 {appWithoutB3 && (
                   <span className="block text-amber-300">
