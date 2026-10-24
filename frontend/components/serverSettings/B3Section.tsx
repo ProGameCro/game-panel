@@ -7,6 +7,7 @@ import { linuxGsmConfigPaths, parseCommandLine, readCfgValue, readOptional, writ
 // BigBrotherBot (B3) for Call of Duty 4. B3 runs in its own container next to the game server, managed by the
 // gamepanel-b3 service on the host (installed by gp-b3.sh). The service and this card share files in the server folder:
 //   b3/conf, b3/parsers, b3/extplugins  the user's B3 configs, parsers and plugins (uploaded with the file manager)
+//   b3/app                              optional: the user's own complete B3 (with b3_run.py), used instead of the built-in one
 //   b3/control.json                     written here: start / stop / restart requests
 //   b3/status.json                      written by the service: container state, heartbeat and B3's database
 //   b3/logs/console.log                 B3's console output
@@ -47,6 +48,9 @@ conf/        your b3.ini or b3.xml and the plugin configs
 parsers/     your parser files (.py), for example cod4x.py -> "parser: cod4x"
 extplugins/  your plugins (.py files or folders)
 logs/        console.log (B3 output)
+app/         optional: your own complete B3 (the folder with b3_run.py). When it is here it is used
+             instead of the built-in B3 1.12; its requirements.txt is installed automatically.
+             Configs can then also stay in app/b3/conf.
 
 Inside B3 this server folder is /data, for example:
   game_log: /data/serverfiles/main/games_mp.log
@@ -75,6 +79,7 @@ export function B3Section({
   const [configs, setConfigs] = useState<string[]>([]);
   const [parsers, setParsers] = useState<string[]>([]);
   const [config, setConfig] = useState('');
+  const [ownB3, setOwnB3] = useState(false);
   const [status, setStatus] = useState<B3Status | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [consoleLog, setConsoleLog] = useState('');
@@ -102,13 +107,19 @@ export function B3Section({
       const root = await apiClient.listServerFiles(serverId, B3_DIR).catch(() => null);
       setInstalled(Boolean(root));
       if (root) {
-        const [conf, parserDir] = await Promise.all([
+        const [conf, parserDir, app, appConf] = await Promise.all([
           apiClient.listServerFiles(serverId, `${B3_DIR}/conf`).catch(() => null),
           apiClient.listServerFiles(serverId, `${B3_DIR}/parsers`).catch(() => null),
+          apiClient.listServerFiles(serverId, `${B3_DIR}/app`).catch(() => null),
+          apiClient.listServerFiles(serverId, `${B3_DIR}/app/b3/conf`).catch(() => null),
         ]);
-        const files = (conf?.entries ?? []).filter((e) => e.type === 'file' && CONFIG_FILE.test(e.name)).map((e) => e.name).sort();
+        const configFiles = (listing: typeof conf, dir: string) =>
+          (listing?.entries ?? []).filter((e) => e.type === 'file' && CONFIG_FILE.test(e.name)).map((e) => `${dir}/${e.name}`).sort();
+        // config paths are relative to b3/, the service accepts the same form
+        const files = [...configFiles(conf, 'conf'), ...configFiles(appConf, 'app/b3/conf')];
+        setOwnB3(Boolean(app?.entries.some((e) => e.type === 'file' && e.name === 'b3_run.py')));
         setConfigs(files);
-        setConfig((current) => (files.includes(current) ? current : files.find((f) => /^b3\.(ini|xml)$/i.test(f)) ?? files[0] ?? ''));
+        setConfig((current) => (files.includes(current) ? current : files.find((f) => /\/b3\.(ini|xml)$/i.test(f)) ?? files[0] ?? ''));
         setParsers((parserDir?.entries ?? []).filter((e) => e.type === 'file' && e.name.endsWith('.py')).map((e) => e.name.replace(/\.py$/, '')));
       }
       // what B3 needs from the game server, taken from the LinuxGSM config the Command line card edits
@@ -214,7 +225,7 @@ export function B3Section({
           </h3>
           <p className={`mt-1 text-sm ${textSecondary}`}>
             Admin bot for the server. Upload your configs to <code>b3/conf</code>, parsers to <code>b3/parsers</code> and plugins to{' '}
-            <code>b3/extplugins</code>, then start B3.
+            <code>b3/extplugins</code>, or your whole B3 to <code>b3/app</code>, then start B3.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -261,11 +272,15 @@ export function B3Section({
               <span className={key}>Config</span>
               {configs.length > 0 ? (
                 <div className="max-w-xs">
-                  <AppSelect options={configs.map((c) => ({ value: c, label: `b3/conf/${c}` }))} value={config} onChange={setConfig} disabled={!canWriteFileManager} />
+                  <AppSelect options={configs.map((c) => ({ value: c, label: `b3/${c}` }))} value={config} onChange={setConfig} disabled={!canWriteFileManager} />
                 </div>
               ) : (
-                <span className="text-sm text-amber-300">No .ini or .xml in b3/conf yet. Upload your B3 config.</span>
+                <span className="text-sm text-amber-300">No .ini or .xml in b3/conf (or b3/app/b3/conf) yet. Upload your B3 config.</span>
               )}
+            </div>
+            <div className={row}>
+              <span className={key}>B3</span>
+              <span className={val}>{ownB3 ? 'your own B3 from b3/app' : 'built-in B3 1.12 (upload your own B3 to b3/app to use it instead)'}</span>
             </div>
             <div className={row}>
               <span className={key}>Your parsers</span>
