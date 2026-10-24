@@ -1,8 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Bot, CheckCircle2, Eye, EyeOff, FolderOpen, Play, RefreshCw, RotateCw, Square } from 'lucide-react';
+import {
+  AlertTriangle,
+  Bot,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  FolderOpen,
+  Play,
+  RefreshCw,
+  RotateCw,
+  Square,
+  Trash2,
+} from 'lucide-react';
 import { apiClient } from '../../utils/api';
 import { AppButton, AppSelect } from '../../src/ui/components';
-import { linuxGsmConfigPaths, parseCommandLine, readCfgValue, readOptional, writeServerFile } from './Cod4ModSection';
+import {
+  linuxGsmConfigPaths,
+  parseCommandLine,
+  readCfgValue,
+  readOptional,
+  writeServerFile,
+} from './Cod4ModSection';
 
 // BigBrotherBot (B3) for Call of Duty 4. B3 runs in its own container next to the game server, managed by the
 // gamepanel-b3 service on the host (installed by gp-b3.sh). The service and this card share files in the server folder:
@@ -37,11 +55,73 @@ type B3Status = {
 const B3_DIR = 'b3';
 const FOLDERS = ['conf', 'parsers', 'extplugins', 'logs'];
 const CONFIG_FILE = /\.(ini|xml)$/i;
-// parsers and helper modules that come with B3 1.12; anything else in a parsers folder is the user's own
+// parsers and helper modules of the built-in B3 (B3 1.12 plus cod4x); anything else in a parsers folder is the user's own
 const STOCK_PARSERS = new Set(
-  ('__init__ altitude arma2 arma3 bf3 bf4 bfbc2 bfh chiv cod cod2 cod4 cod4gr cod5 cod6 cod7 cod8 csgo et etpro insurgency ' +
-    'iourt41 iourt42 iourt43 moh mohw oa081 punkbuster q3 ro2 smg smg11 sof2 sof2pm wop wop15').split(' ')
+  (
+    '__init__ altitude arma2 arma3 bf3 bf4 bfbc2 bfh chiv cod cod2 cod4 cod4gr cod4x cod5 cod6 cod7 cod8 csgo et etpro insurgency ' +
+    'iourt41 iourt42 iourt43 moh mohw oa081 punkbuster q3 ro2 smg smg11 sof2 sof2pm wop wop15'
+  ).split(' ')
 );
+const DATABASE_PLACEHOLDER = 'mysql://b3:password@127.0.0.1/b3';
+
+/** Ready-to-use b3.ini for this server (B3's distribution config with the server's values filled in). */
+const defaultConfig = (v: { database: string; rcon: string; port: string; gameLog: string }) => `# B3 config made by the panel (Install B3). Edit it in the file manager, then restart B3.
+[b3]
+parser: cod4x
+database: ${v.database}
+bot_name: b3
+bot_prefix: ^0(^2b3^0)^7:
+time_format: %I:%M%p %Z %m/%d/%y
+time_zone: UTC
+log_level: 9
+logfile: /data/b3/logs/b3.log
+disabled_plugins:
+external_plugins_dir: @b3/extplugins
+
+[server]
+rcon_password: ${v.rcon || 'set-the-rcon-password'}
+port: ${v.port || '28960'}
+game_log: ${v.gameLog}
+public_ip: 127.0.0.1
+rcon_ip: 127.0.0.1
+punkbuster: off
+delay: 0.33
+lines_per_second: 50
+permban_with_frozensand: no
+tempban_with_frozensand: no
+
+[autodoc]
+type: html
+maxlevel: 100
+destination: /data/b3/logs/b3_doc.html
+
+[update]
+channel: skip
+
+[messages]
+kicked_by: $clientname^7 was kicked by $adminname^7 $reason
+kicked: $clientname^7 was kicked $reason
+banned_by: $clientname^7 was banned by $adminname^7 $reason
+banned: $clientname^7 was banned $reason
+temp_banned_by: $clientname^7 was temp banned by $adminname^7 for $banduration^7 $reason
+temp_banned: $clientname^7 was temp banned for $banduration^7 $reason
+unbanned_by: $clientname^7 was un-banned by $adminname^7 $reason
+unbanned: $clientname^7 was un-banned^7 $reason
+
+# plugin configs of the built-in B3; to change one, copy it to b3/conf and point the line to /data/b3/conf/...
+[plugins]
+admin: @b3/conf/plugin_admin.ini
+adv: @b3/conf/plugin_adv.xml
+censor: @b3/conf/plugin_censor.xml
+cmdmanager: @b3/conf/plugin_cmdmanager.ini
+pingwatch: @b3/conf/plugin_pingwatch.ini
+pluginmanager: @b3/conf/plugin_pluginmanager.ini
+spamcontrol: @b3/conf/plugin_spamcontrol.ini
+stats: @b3/conf/plugin_stats.ini
+status: @b3/conf/plugin_status.ini
+tk: @b3/conf/plugin_tk.ini
+welcome: @b3/conf/plugin_welcome.ini
+`;
 const POLL_MS = 4000;
 // the service writes status.json at least every 15 s; allow some clock difference between browser and server
 const STALE_SECONDS = 120;
@@ -84,11 +164,16 @@ export function B3Section({
   const [configs, setConfigs] = useState<string[]>([]);
   const [parsers, setParsers] = useState<string[]>([]);
   const [config, setConfig] = useState('');
-  const [ownB3, setOwnB3] = useState(false);
+  const [appRoot, setAppRoot] = useState('');
+  const [appWithoutB3, setAppWithoutB3] = useState(false);
+  const [confirmUninstall, setConfirmUninstall] = useState(false);
+  const [dropDatabase, setDropDatabase] = useState(false);
   const [status, setStatus] = useState<B3Status | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [consoleLog, setConsoleLog] = useState('');
   const [server, setServer] = useState({ port: '', rcon: '', gameLog: '' });
+  // null: not checked (the config does not use the cod4x parser)
+  const [b3hide, setB3hide] = useState<boolean | null>(null);
   const [showRcon, setShowRcon] = useState(false);
   const consoleRef = useRef<HTMLPreElement>(null);
 
@@ -109,39 +194,93 @@ export function B3Section({
     setLoading(true);
     setError(null);
     try {
+      let mainConfigs: string[] = [];
       const root = await apiClient.listServerFiles(serverId, B3_DIR).catch(() => null);
       setInstalled(Boolean(root));
       if (root) {
-        const [conf, parserDir, app, appConf, appParsers] = await Promise.all([
-          apiClient.listServerFiles(serverId, `${B3_DIR}/conf`).catch(() => null),
-          apiClient.listServerFiles(serverId, `${B3_DIR}/parsers`).catch(() => null),
-          apiClient.listServerFiles(serverId, `${B3_DIR}/app`).catch(() => null),
-          apiClient.listServerFiles(serverId, `${B3_DIR}/app/b3/conf`).catch(() => null),
-          apiClient.listServerFiles(serverId, `${B3_DIR}/app/b3/parsers`).catch(() => null),
+        const list = (path: string) =>
+          apiClient.listServerFiles(serverId, `${B3_DIR}/${path}`).catch(() => null);
+        const [conf, parserDir, app] = await Promise.all([
+          list('conf'),
+          list('parsers'),
+          list('app'),
         ]);
+        // own B3: b3/app/b3_run.py, or one folder deeper (uploading a folder or zip adds one level)
+        let appRoot = '';
+        if (app?.entries.some((e) => e.type === 'file' && e.name === 'b3_run.py')) {
+          appRoot = 'app';
+        } else {
+          for (const dir of (app?.entries ?? []).filter((e) => e.type === 'dir').slice(0, 10)) {
+            const inner = await list(`app/${dir.name}`);
+            if (inner?.entries.some((e) => e.type === 'file' && e.name === 'b3_run.py')) {
+              appRoot = `app/${dir.name}`;
+              break;
+            }
+          }
+        }
+        const [appConf, appParsers] = appRoot
+          ? await Promise.all([list(`${appRoot}/b3/conf`), list(`${appRoot}/b3/parsers`)])
+          : [null, null];
         const configFiles = (listing: typeof conf, dir: string) =>
-          (listing?.entries ?? []).filter((e) => e.type === 'file' && CONFIG_FILE.test(e.name)).map((e) => `${dir}/${e.name}`).sort();
+          (listing?.entries ?? [])
+            .filter((e) => e.type === 'file' && CONFIG_FILE.test(e.name))
+            .map((e) => (dir ? `${dir}/${e.name}` : e.name))
+            .sort();
         // config paths are relative to b3/, the service accepts the same form
-        const all = [...configFiles(conf, 'conf'), ...configFiles(appConf, 'app/b3/conf')];
+        const all = [
+          ...configFiles(conf, 'conf'),
+          ...configFiles(root, ''),
+          ...(appRoot ? configFiles(appConf, `${appRoot}/b3/conf`) : []),
+        ];
         // main B3 configs only (b3.ini, b3.xml, b3_server2.ini …), not plugin configs or B3's example files
         const name = (f: string) => f.slice(f.lastIndexOf('/') + 1);
-        const main = all.filter((f) => /^b3/i.test(name(f)) && !/example|distribution/i.test(name(f)));
-        const files = main.length ? main : all.filter((f) => !/^plugin_/i.test(name(f)) && !/example|distribution/i.test(name(f)));
-        setOwnB3(Boolean(app?.entries.some((e) => e.type === 'file' && e.name === 'b3_run.py')));
+        const main = all.filter(
+          (f) => /^b3/i.test(name(f)) && !/example|distribution/i.test(name(f))
+        );
+        const files = main.length
+          ? main
+          : all.filter((f) => !/^plugin_/i.test(name(f)) && !/example|distribution/i.test(name(f)));
+        setAppRoot(appRoot);
+        setAppWithoutB3(Boolean(app && !appRoot && app.entries.length > 0));
         setConfigs(files);
-        setConfig((current) => (files.includes(current) ? current : files.find((f) => /\/b3\.(ini|xml)$/i.test(f)) ?? files[0] ?? ''));
+        mainConfigs = files;
+        setConfig((current) =>
+          files.includes(current)
+            ? current
+            : (files.find((f) => /(^|\/)b3\.(ini|xml)$/i.test(f)) ?? files[0] ?? '')
+        );
         // own parsers: b3/parsers plus the ones inside an uploaded B3 that B3 1.12 does not have
         const parserNames = (listing: typeof conf) =>
-          (listing?.entries ?? []).filter((e) => e.type === 'file' && e.name.endsWith('.py')).map((e) => e.name.replace(/\.py$/, ''));
-        const own = new Set([...parserNames(parserDir), ...parserNames(appParsers).filter((n) => !STOCK_PARSERS.has(n))]);
+          (listing?.entries ?? [])
+            .filter((e) => e.type === 'file' && e.name.endsWith('.py'))
+            .map((e) => e.name.replace(/\.py$/, ''));
+        const own = new Set([
+          ...parserNames(parserDir),
+          ...parserNames(appParsers).filter((n) => !STOCK_PARSERS.has(n)),
+        ]);
         setParsers([...own].sort());
       }
       // what B3 needs from the game server, taken from the LinuxGSM config the Command line card edits
       const sources = await Promise.all(
-        [paths.secretsInstance, paths.instance, paths.secretsCommon, paths.common, paths.defaults].map((p) => readOptional(serverId, p))
+        [
+          paths.secretsInstance,
+          paths.instance,
+          paths.secretsCommon,
+          paths.common,
+          paths.defaults,
+        ].map((p) => readOptional(serverId, p))
       );
-      const value = (key: string) => sources.map((c) => readCfgValue(c ?? '', key)).find((v) => v !== null) ?? '';
+      const value = (key: string) =>
+        sources.map((c) => readCfgValue(c ?? '', key)).find((v) => v !== null) ?? '';
       const line = parseCommandLine(value('startparameters'));
+      // the cod4x parser reads players with the b3status command of the CoD4X plugin b3hide
+      const configTexts = await Promise.all(mainConfigs.slice(0, 3).map((f) => readOptional(serverId, `${B3_DIR}/${f}`)));
+      if (configTexts.some((text) => text && /parser\W+cod4x\b/i.test(text))) {
+        const plugins = await apiClient.listServerFiles(serverId, 'serverfiles/plugins').catch(() => null);
+        setB3hide(Boolean(plugins?.entries.some((e) => /^b3hide/i.test(e.name))));
+      } else {
+        setB3hide(null);
+      }
       setServer({
         port: value('port'),
         rcon: line.rcon === '${rconpassword}' ? value('rconpassword') : line.rcon,
@@ -185,6 +324,19 @@ export function B3Section({
         await apiClient.createServerDirectory(serverId, B3_DIR, folder).catch(() => undefined);
       }
       await writeServerFile(serverId, `${B3_DIR}/README.txt`, README);
+      // a ready b3.ini, unless the user already has a config; the database name comes from the service (a few seconds)
+      if (!(await readOptional(serverId, `${B3_DIR}/conf/b3.ini`)) && !(await readOptional(serverId, `${B3_DIR}/conf/b3.xml`))) {
+        let database = '';
+        for (let i = 0; i < 8 && !database; i += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+          try {
+            database = (JSON.parse((await readOptional(serverId, `${B3_DIR}/status.json`)) ?? '{}') as Partial<B3Status>).database?.url ?? '';
+          } catch {
+            database = '';
+          }
+        }
+        await writeServerFile(serverId, `${B3_DIR}/conf/b3.ini`, defaultConfig({ ...server, database: database || DATABASE_PLACEHOLDER }));
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create the B3 folder.');
@@ -198,7 +350,11 @@ export function B3Section({
     setError(null);
     try {
       const id = newId();
-      await writeServerFile(serverId, `${B3_DIR}/control.json`, `${JSON.stringify({ action, id, config }, null, 2)}\n`);
+      await writeServerFile(
+        serverId,
+        `${B3_DIR}/control.json`,
+        `${JSON.stringify({ action, id, config }, null, 2)}\n`
+      );
       setPending(id);
       // stop waiting if the service never picks the request up (it is then shown as offline)
       window.setTimeout(() => setPending((current) => (current === id ? null : current)), 20000);
@@ -220,11 +376,48 @@ export function B3Section({
     : !serviceOnline
       ? { text: 'Service offline', cls: 'border-amber-500/40 bg-amber-500/10 text-amber-300' }
       : running
-        ? { text: status?.state === 'restarting' ? 'Restarting' : 'Running', cls: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' }
+        ? {
+            text: status?.state === 'restarting' ? 'Restarting' : 'Running',
+            cls: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
+          }
         : status?.state === 'exited'
-          ? { text: `Stopped (exit ${status.exitCode ?? '?'})`, cls: 'border-red-500/40 bg-red-500/10 text-red-300' }
+          ? {
+              text: `Stopped (exit ${status.exitCode ?? '?'})`,
+              cls: 'border-red-500/40 bg-red-500/10 text-red-300',
+            }
           : { text: 'Stopped', cls: 'border-gray-500/40 bg-gray-500/10 text-gray-300' };
   const canControl = installed && serviceOnline && canWriteFileManager && !busy && !pending;
+
+  const uninstall = async () => {
+    setBusy('uninstall');
+    setError(null);
+    try {
+      const exists = async () =>
+        Boolean(await apiClient.listServerFiles(serverId, B3_DIR).catch(() => null));
+      if (serviceOnline) {
+        // the service stops B3 and removes the folder (it can also remove files B3 created)
+        const request = { action: 'uninstall', id: newId(), dropDatabase };
+        await writeServerFile(
+          serverId,
+          `${B3_DIR}/control.json`,
+          `${JSON.stringify(request, null, 2)}\n`
+        );
+        for (let i = 0; i < 15 && (await exists()); i += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        }
+      }
+      if (await exists()) await apiClient.deleteServerPaths(serverId, [B3_DIR]);
+      setConfirmUninstall(false);
+      setDropDatabase(false);
+      setStatus(null);
+      setConsoleLog('');
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not uninstall B3.');
+    } finally {
+      setBusy(null);
+    }
+  };
   const row = 'grid gap-1 sm:grid-cols-[9rem_1fr] sm:items-baseline sm:gap-x-4';
   const key = `text-sm font-semibold sm:text-right ${textPrimary}`;
   const val = `break-all font-mono text-sm ${textSecondary}`;
@@ -235,11 +428,14 @@ export function B3Section({
         <div>
           <h3 className={`flex items-center gap-2 text-base font-semibold ${textPrimary}`}>
             <Bot className="h-4 w-4 text-sky-300" /> B3 (BigBrotherBot)
-            <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${badge.cls}`}>{badge.text}</span>
+            <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${badge.cls}`}>
+              {badge.text}
+            </span>
           </h3>
           <p className={`mt-1 text-sm ${textSecondary}`}>
-            Admin bot for the server. Upload your configs to <code>b3/conf</code>, parsers to <code>b3/parsers</code> and plugins to{' '}
-            <code>b3/extplugins</code>, or your whole B3 to <code>b3/app</code>, then start B3.
+            Admin bot for the server. Upload your configs to <code>b3/conf</code>, parsers to{' '}
+            <code>b3/parsers</code> and plugins to <code>b3/extplugins</code>, or your whole B3 to{' '}
+            <code>b3/app</code>, then start B3.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -260,7 +456,12 @@ export function B3Section({
             Creates the <code>b3</code> folder (conf, parsers, extplugins, logs) in this server.
           </span>
           {canWriteFileManager && (
-            <AppButton tone="primary" className="!h-auto !px-5 !py-2" onClick={() => void install()} disabled={busy !== null}>
+            <AppButton
+              tone="primary"
+              className="!h-auto !px-5 !py-2"
+              onClick={() => void install()}
+              disabled={busy !== null}
+            >
               <span className="inline-flex items-center gap-2 whitespace-nowrap">
                 <Bot className="h-4 w-4" /> {busy === 'install' ? 'Installing…' : 'Install B3'}
               </span>
@@ -275,8 +476,8 @@ export function B3Section({
             <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
               <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
               <span>
-                The B3 service on the host is not answering. Run <code>sudo bash gp-b3.sh</code> on the server (or{' '}
-                <code>systemctl restart gamepanel-b3</code>).
+                The B3 service on the host is not answering. Run <code>sudo bash gp-b3.sh</code> on
+                the server (or <code>systemctl restart gamepanel-b3</code>).
               </span>
             </div>
           )}
@@ -286,20 +487,51 @@ export function B3Section({
               <span className={key}>Config</span>
               {configs.length > 0 ? (
                 <div className="max-w-xs">
-                  <AppSelect options={configs.map((c) => ({ value: c, label: `b3/${c}` }))} value={config} onChange={setConfig} disabled={!canWriteFileManager} />
+                  <AppSelect
+                    options={configs.map((c) => ({ value: c, label: `b3/${c}` }))}
+                    value={config}
+                    onChange={setConfig}
+                    disabled={!canWriteFileManager}
+                  />
                 </div>
               ) : (
-                <span className="text-sm text-amber-300">No .ini or .xml in b3/conf (or b3/app/b3/conf) yet. Upload your B3 config.</span>
+                <span className="text-sm text-amber-300">
+                  No b3.ini or b3.xml found in b3, b3/conf or your B3's b3/conf. Upload your B3
+                  config.
+                </span>
               )}
             </div>
             <div className={row}>
               <span className={key}>B3</span>
-              <span className={val}>{ownB3 ? 'your own B3 from b3/app' : 'built-in B3 1.12 (upload your own B3 to b3/app to use it instead)'}</span>
+              <span className={val}>
+                {appRoot
+                  ? `your own B3 from b3/${appRoot}`
+                  : 'built-in B3 1.12 with cod4x (upload your own B3 to b3/app to use it instead)'}
+                {appWithoutB3 && (
+                  <span className="block text-amber-300">
+                    b3/app has no b3_run.py (also not one folder deeper), so it is not used.
+                  </span>
+                )}
+              </span>
             </div>
             <div className={row}>
               <span className={key}>Your parsers</span>
-              <span className={val}>{parsers.length ? `${parsers.join(', ')} (use the name in "parser:")` : 'none (built-in parsers: cod4, cod4gr …)'}</span>
+              <span className={val}>
+                {parsers.length
+                  ? `${parsers.join(', ')} (use the name in "parser:")`
+                  : 'none (built-in parsers: cod4x, cod4, cod4gr …)'}
+              </span>
             </div>
+            {b3hide !== null && (
+              <div className={row}>
+                <span className={key}>b3hide plugin</span>
+                <span className={b3hide ? val : 'text-sm text-amber-300'}>
+                  {b3hide
+                    ? 'found in serverfiles/plugins'
+                    : 'not found in serverfiles/plugins. The cod4x parser needs it (CoD4X plugin b3hide, loaded with loadplugin b3hide).'}
+                </span>
+              </div>
+            )}
             <div className={row}>
               <span className={key}>game_log</span>
               <span className={val}>{server.gameLog}</span>
@@ -311,9 +543,18 @@ export function B3Section({
             <div className={row}>
               <span className={key}>rcon_password</span>
               <span className={`flex items-center gap-2 ${val}`}>
-                {server.rcon ? (showRcon ? server.rcon : '•'.repeat(Math.min(server.rcon.length, 12))) : 'not set (Command line card)'}
+                {server.rcon
+                  ? showRcon
+                    ? server.rcon
+                    : '•'.repeat(Math.min(server.rcon.length, 12))
+                  : 'not set (Command line card)'}
                 {server.rcon && (
-                  <button type="button" className="p-1 text-gray-400 hover:text-white" onClick={() => setShowRcon((v) => !v)} aria-label={showRcon ? 'Hide' : 'Show'}>
+                  <button
+                    type="button"
+                    className="p-1 text-gray-400 hover:text-white"
+                    onClick={() => setShowRcon((v) => !v)}
+                    aria-label={showRcon ? 'Hide' : 'Show'}
+                  >
                     {showRcon ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 )}
@@ -339,7 +580,10 @@ export function B3Section({
           {!error && !lastError && status?.lastAction?.result === 'ok' && running && (
             <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">
               <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-              <span>B3 is running{status.startedAt ? ` since ${new Date(status.startedAt).toLocaleString()}` : ''}.</span>
+              <span>
+                B3 is running
+                {status.startedAt ? ` since ${new Date(status.startedAt).toLocaleString()}` : ''}.
+              </span>
             </div>
           )}
 
@@ -352,33 +596,101 @@ export function B3Section({
                 </AppButton>
               )}
             </div>
-            <pre ref={consoleRef} className={`max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-lg border ${borderColor} bg-black/30 p-2 font-mono text-xs ${textSecondary}`}>
+            <pre
+              ref={consoleRef}
+              className={`max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-lg border ${borderColor} bg-black/30 p-2 font-mono text-xs ${textSecondary}`}
+            >
               {consoleLog || 'No output yet.'}
             </pre>
           </div>
 
-          {canWriteFileManager && (
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
-              {running ? (
-                <>
-                  <AppButton tone="neutral" className="!h-auto min-w-[8rem] !px-5 !py-2" onClick={() => void send('restart')} disabled={!canControl}>
-                    <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                      <RotateCw className="h-4 w-4" /> Restart
-                    </span>
-                  </AppButton>
-                  <AppButton tone="critical" className="!h-auto min-w-[8rem] !px-5 !py-2" onClick={() => void send('stop')} disabled={!canControl}>
-                    <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                      <Square className="h-4 w-4" /> Stop
-                    </span>
-                  </AppButton>
-                </>
-              ) : (
-                <AppButton tone="primary" className="!h-auto min-w-[8rem] !px-5 !py-2" onClick={() => void send('start')} disabled={!canControl || !config}>
+          {canWriteFileManager && confirmUninstall && (
+            <div className="mt-4 grid gap-3 rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
+              <span>
+                Uninstall removes the <code>b3</code> folder of this server: configs, parsers,
+                plugins, your own B3 and logs. B3 is stopped first.
+              </span>
+              {status?.database && (
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={dropDatabase}
+                    onChange={(e) => setDropDatabase(e.target.checked)}
+                  />
+                  Also delete the database <code>{status.database.name}</code> (admins, bans,
+                  stats). Leave it unticked to keep them.
+                </label>
+              )}
+              <div className="flex flex-wrap justify-end gap-2">
+                <AppButton
+                  tone="neutral"
+                  className="!h-auto !px-5 !py-2"
+                  onClick={() => setConfirmUninstall(false)}
+                  disabled={busy !== null}
+                >
+                  Cancel
+                </AppButton>
+                <AppButton
+                  tone="critical"
+                  className="!h-auto !px-5 !py-2"
+                  onClick={() => void uninstall()}
+                  disabled={busy !== null}
+                >
                   <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                    <Play className="h-4 w-4" /> {pending ? 'Starting…' : 'Start B3'}
+                    <Trash2 className="h-4 w-4" />{' '}
+                    {busy === 'uninstall' ? 'Uninstalling…' : 'Yes, uninstall B3'}
                   </span>
                 </AppButton>
-              )}
+              </div>
+            </div>
+          )}
+
+          {canWriteFileManager && !confirmUninstall && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+              <AppButton
+                tone="ghost"
+                onClick={() => setConfirmUninstall(true)}
+                disabled={busy !== null}
+              >
+                <Trash2 className="h-4 w-4" /> Uninstall B3
+              </AppButton>
+              <div className="flex flex-wrap gap-2">
+                {running ? (
+                  <>
+                    <AppButton
+                      tone="neutral"
+                      className="!h-auto min-w-[8rem] !px-5 !py-2"
+                      onClick={() => void send('restart')}
+                      disabled={!canControl}
+                    >
+                      <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                        <RotateCw className="h-4 w-4" /> Restart
+                      </span>
+                    </AppButton>
+                    <AppButton
+                      tone="critical"
+                      className="!h-auto min-w-[8rem] !px-5 !py-2"
+                      onClick={() => void send('stop')}
+                      disabled={!canControl}
+                    >
+                      <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                        <Square className="h-4 w-4" /> Stop
+                      </span>
+                    </AppButton>
+                  </>
+                ) : (
+                  <AppButton
+                    tone="primary"
+                    className="!h-auto min-w-[8rem] !px-5 !py-2"
+                    onClick={() => void send('start')}
+                    disabled={!canControl || !config}
+                  >
+                    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                      <Play className="h-4 w-4" /> {pending ? 'Starting…' : 'Start B3'}
+                    </span>
+                  </AppButton>
+                )}
+              </div>
             </div>
           )}
         </>
