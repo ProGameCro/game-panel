@@ -64,6 +64,17 @@ const STOCK_PARSERS = new Set(
 );
 const DATABASE_PLACEHOLDER = 'mysql://b3:password@127.0.0.1/b3';
 
+/** Sets B3 settings in a b3.ini (key: value lines) or b3.xml (<set name="key">value</set>) config. */
+export const setConfigValues = (text: string, xml: boolean, values: Record<string, string>): string =>
+  Object.entries(values).reduce((out, [key, value]) => {
+    if (xml) {
+      const re = new RegExp(`(<set\\s+name=["']${key}["']\\s*>)[^<]*(</set>)`, 'i');
+      return re.test(out) ? out.replace(re, (_m, open: string, close: string) => `${open}${value}${close}`) : out;
+    }
+    const re = new RegExp(`^(\\s*${key}\\s*[:=]).*$`, 'im');
+    return re.test(out) ? out.replace(re, (_m, head: string) => `${head} ${value}`) : out;
+  }, text);
+
 /** Ready-to-use b3.ini for this server (B3's distribution config with the server's values filled in). */
 const defaultConfig = (v: { database: string; rcon: string; port: string; gameLog: string }) => `# B3 config made by the panel (Install B3). Edit it in the file manager, then restart B3.
 [b3]
@@ -167,13 +178,12 @@ export function B3Section({
   const [appRoot, setAppRoot] = useState('');
   const [appWithoutB3, setAppWithoutB3] = useState(false);
   const [confirmUninstall, setConfirmUninstall] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [dropDatabase, setDropDatabase] = useState(false);
   const [status, setStatus] = useState<B3Status | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [consoleLog, setConsoleLog] = useState('');
   const [server, setServer] = useState({ port: '', rcon: '', gameLog: '' });
-  // null: not checked (the config does not use the cod4x parser)
-  const [b3hide, setB3hide] = useState<boolean | null>(null);
   const [showRcon, setShowRcon] = useState(false);
   const consoleRef = useRef<HTMLPreElement>(null);
 
@@ -194,7 +204,6 @@ export function B3Section({
     setLoading(true);
     setError(null);
     try {
-      let mainConfigs: string[] = [];
       const root = await apiClient.listServerFiles(serverId, B3_DIR).catch(() => null);
       setInstalled(Boolean(root));
       if (root) {
@@ -243,7 +252,6 @@ export function B3Section({
         setAppRoot(appRoot);
         setAppWithoutB3(Boolean(app && !appRoot && app.entries.length > 0));
         setConfigs(files);
-        mainConfigs = files;
         setConfig((current) =>
           files.includes(current)
             ? current
@@ -273,14 +281,6 @@ export function B3Section({
       const value = (key: string) =>
         sources.map((c) => readCfgValue(c ?? '', key)).find((v) => v !== null) ?? '';
       const line = parseCommandLine(value('startparameters'));
-      // the cod4x parser reads players with the b3status command of the CoD4X plugin b3hide
-      const configTexts = await Promise.all(mainConfigs.slice(0, 3).map((f) => readOptional(serverId, `${B3_DIR}/${f}`)));
-      if (configTexts.some((text) => text && /parser\W+cod4x\b/i.test(text))) {
-        const plugins = await apiClient.listServerFiles(serverId, 'serverfiles/plugins').catch(() => null);
-        setB3hide(Boolean(plugins?.entries.some((e) => /^b3hide/i.test(e.name))));
-      } else {
-        setB3hide(null);
-      }
       setServer({
         port: value('port'),
         rcon: line.rcon === '${rconpassword}' ? value('rconpassword') : line.rcon,
@@ -387,6 +387,32 @@ export function B3Section({
             }
           : { text: 'Stopped', cls: 'border-gray-500/40 bg-gray-500/10 text-gray-300' };
   const canControl = installed && serviceOnline && canWriteFileManager && !busy && !pending;
+
+  const writeValues = async () => {
+    setBusy('values');
+    setError(null);
+    setNotice(null);
+    try {
+      if (!server.rcon) throw new Error('Set the RCON password in the Command line card first, then write the values again.');
+      const path = `${B3_DIR}/${config}`;
+      const text = await readOptional(serverId, path);
+      if (text === null) throw new Error(`Could not read b3/${config}.`);
+      const values: Record<string, string> = {
+        rcon_password: server.rcon,
+        port: server.port || '28960',
+        rcon_ip: '127.0.0.1',
+        game_log: server.gameLog,
+        ...(status?.database ? { database: status.database.url } : {}),
+      };
+      const next = setConfigValues(text, /\.xml$/i.test(config), values);
+      if (next !== text) await writeServerFile(serverId, path, next);
+      setNotice(next !== text ? `Saved to b3/${config}.${running ? ' Restart B3 to use them.' : ''}` : `b3/${config} already has these values.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update the config.');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const uninstall = async () => {
     setBusy('uninstall');
@@ -522,16 +548,6 @@ export function B3Section({
                   : 'none (built-in parsers: cod4x, cod4, cod4gr …)'}
               </span>
             </div>
-            {b3hide !== null && (
-              <div className={row}>
-                <span className={key}>b3hide plugin</span>
-                <span className={b3hide ? val : 'text-sm text-amber-300'}>
-                  {b3hide
-                    ? 'found in serverfiles/plugins'
-                    : 'not found in serverfiles/plugins. The cod4x parser needs it (CoD4X plugin b3hide, loaded with loadplugin b3hide).'}
-                </span>
-              </div>
-            )}
             <div className={row}>
               <span className={key}>game_log</span>
               <span className={val}>{server.gameLog}</span>
@@ -547,7 +563,11 @@ export function B3Section({
                   ? showRcon
                     ? server.rcon
                     : '•'.repeat(Math.min(server.rcon.length, 12))
-                  : 'not set (Command line card)'}
+                  : (
+                    <span className="text-amber-300">
+                      not set: set it in the Command line card (+set rcon_password), Save, then press Reload here
+                    </span>
+                  )}
                 {server.rcon && (
                   <button
                     type="button"
@@ -569,6 +589,14 @@ export function B3Section({
             <p className={`text-xs ${textSecondary} sm:pl-[10rem]`}>
               Values to use in your B3 config. Inside B3 this server folder is <code>/data</code>.
             </p>
+            {canWriteFileManager && config && (
+              <div className="flex flex-wrap items-center gap-3 sm:pl-[10rem]">
+                <AppButton tone="neutral" className="!h-auto !px-4 !py-1.5" onClick={() => void writeValues()} disabled={busy !== null}>
+                  {busy === 'values' ? 'Saving…' : `Write these values into b3/${config}`}
+                </AppButton>
+                {notice && <span className="text-sm text-emerald-300">{notice}</span>}
+              </div>
+            )}
           </div>
 
           {(error || lastError) && (
