@@ -5,8 +5,8 @@ import { AppButton, AppInput, AppSelect } from '../../src/ui/components';
 import { RestartToApplyNote } from './RestartToApplyNote';
 
 // Call of Duty 4 (LinuxGSM cod4server) command line, edited like on CoD4X hosting panels:
-// +set sv_authtoken, r_xassetnum (materials / xanims / xmodels), +set fs_game, +set rcon_password and extra parameters.
-// - startparameters and customparameters are written to the instance config (<gameservername>.cfg), which LinuxGSM
+// +set sv_authtoken, r_xassetnum (materials / xanims / xmodels), +set fs_game and +set rcon_password.
+// - startparameters is written to the instance config (<gameservername>.cfg), which LinuxGSM
 //   reads last of the normal configs, so it overrides _default.cfg and survives LinuxGSM updates;
 // - the RCON password and the auth token are kept in secrets-common.cfg (LinuxGSM's file for secrets), never in server.cfg;
 //   the command line only references ${rconpassword} / ${authtoken};
@@ -116,7 +116,6 @@ const readOptional = async (serverId: number, path: string): Promise<string | nu
 };
 
 const validAsset = (value: string) => value === '' || (/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= ASSET_LIMIT);
-const validCustom = (value: string) => !/["`\\;|&<>\n]|\$\(/.test(value);
 
 function SecretInput({
   value,
@@ -186,14 +185,15 @@ export function Cod4ModSection({
   const [parameters, setParameters] = useState<string | null>(null);
   const [instanceContent, setInstanceContent] = useState('');
   const [secretsContent, setSecretsContent] = useState('');
-  const [initial, setInitial] = useState({ mod: '', auth: '', material: '', xanim: '', xmodel: '', rcon: '', custom: '' });
+  const [initial, setInitial] = useState({ mod: '', auth: '', material: '', xanim: '', xmodel: '', rcon: '' });
 
   const [selected, setSelected] = useState(NO_MOD);
   const [typed, setTyped] = useState('');
   const [auth, setAuth] = useState('');
   const [assets, setAssets] = useState<Assets>({ material: '', xanim: '', xmodel: '' });
   const [rcon, setRcon] = useState('');
-  const [custom, setCustom] = useState('');
+  // ${customparameters} is kept where LinuxGSM's config already has it
+  const [keepCustom, setKeepCustom] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -223,7 +223,6 @@ export function Cod4ModSection({
         xanim: line.assets.xanim,
         xmodel: line.assets.xmodel,
         rcon: line.rcon ? secretOf('rconpassword') : '',
-        custom: line.custom ? readCfgValue(instance ?? '', 'customparameters') ?? '' : '',
       };
       setMods(folders);
       setParameters(effective);
@@ -235,7 +234,7 @@ export function Cod4ModSection({
       setAuth(values.auth);
       setAssets({ material: values.material, xanim: values.xanim, xmodel: values.xmodel });
       setRcon(values.rcon);
-      setCustom(values.custom);
+      setKeepCustom(line.custom);
       if (effective === null) {
         setError(`Could not find "startparameters" in ${paths.defaults}. Start the server once so LinuxGSM creates its config, then reload.`);
       }
@@ -258,12 +257,11 @@ export function Cod4ModSection({
     xanim: !validAsset(assets.xanim),
     xmodel: !validAsset(assets.xmodel),
     rcon: rcon !== '' && !PASSWORD_PATTERN.test(rcon),
-    custom: !validCustom(custom),
   };
   const invalid = Object.values(problems).some(Boolean);
-  const current = { mod, auth, ...assets, rcon, custom: custom.trim() };
+  const current = { mod, auth, ...assets, rcon };
   const changed = (Object.keys(current) as (keyof typeof current)[]).some((k) => current[k] !== initial[k]);
-  const wanted: Cod4CommandLine = { mod, auth: auth !== '', assets, custom: custom.trim() !== '', rcon: rcon !== '' };
+  const wanted: Cod4CommandLine = { mod, auth: auth !== '', assets, custom: keepCustom, rcon: rcon !== '' };
   const preview = parameters === null ? '' : buildCommandLine(parameters, wanted);
 
   const options = useMemo(
@@ -280,10 +278,7 @@ export function Cod4ModSection({
       let secrets = secretsContent;
       secrets = auth ? upsertCfgValue(secrets, 'authtoken', auth) : removeCfgKey(secrets, 'authtoken');
       secrets = rcon ? upsertCfgValue(secrets, 'rconpassword', rcon) : removeCfgKey(secrets, 'rconpassword');
-      let instance = upsertCfgValue(instanceContent, 'startparameters', preview);
-      instance = custom.trim()
-        ? upsertCfgValue(instance, 'customparameters', custom.trim(), 'startparameters')
-        : removeCfgKey(instance, 'customparameters');
+      const instance = upsertCfgValue(instanceContent, 'startparameters', preview);
       if (secrets !== secretsContent) await apiClient.updateServerFile(serverId, paths.secretsCommon, secrets);
       await apiClient.updateServerFile(serverId, paths.instance, instance);
       setSaved(true);
@@ -431,21 +426,6 @@ export function Cod4ModSection({
           {problems.rcon && <span className={bad}>Letters, numbers and ! @ # % ^ * ( ) _ + = . , : - only, no spaces or quotes.</span>}
         </div>
 
-        <label className={row}>
-          <span className={label}>Custom command line</span>
-          <AppInput
-            value={custom}
-            placeholder="+set sv_maxclients 24 +set g_gametype war"
-            className="w-full font-mono"
-            onChange={(event) => {
-              setCustom(event.target.value);
-              setSaved(false);
-            }}
-            disabled={disabled}
-          />
-          <span className={hint}>Added at the end of the start command.</span>
-          {problems.custom && <span className={bad}>Quotes, backslashes and ; | &amp; &lt; &gt; $( are not allowed.</span>}
-        </label>
       </div>
 
       {preview && (
