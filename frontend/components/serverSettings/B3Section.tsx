@@ -532,7 +532,7 @@ export function B3Section({
               <span className={val}>
                 {appRoot
                   ? `your own B3 from b3/${appRoot}`
-                  : 'built-in B3 1.12 with cod4x (upload your own B3 to b3/app to use it instead)'}
+                  : 'your B3 from big-brother-bot-master.zip (B3 1.12 + cod4x parser)'}
                 {appWithoutB3 && (
                   <span className="block text-amber-300">
                     b3/app has no b3_run.py (also not one folder deeper), so it is not used.
@@ -545,7 +545,7 @@ export function B3Section({
               <span className={val}>
                 {parsers.length
                   ? `${parsers.join(', ')} (use the name in "parser:")`
-                  : 'none (built-in parsers: cod4x, cod4, cod4gr …)'}
+                  : 'none extra (your B3 has cod4x, cod4, cod4gr …)'}
               </span>
             </div>
             <div className={row}>
