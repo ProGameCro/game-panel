@@ -37,6 +37,11 @@ type B3Status = {
 const B3_DIR = 'b3';
 const FOLDERS = ['conf', 'parsers', 'extplugins', 'logs'];
 const CONFIG_FILE = /\.(ini|xml)$/i;
+// parsers and helper modules that come with B3 1.12; anything else in a parsers folder is the user's own
+const STOCK_PARSERS = new Set(
+  ('__init__ altitude arma2 arma3 bf3 bf4 bfbc2 bfh chiv cod cod2 cod4 cod4gr cod5 cod6 cod7 cod8 csgo et etpro insurgency ' +
+    'iourt41 iourt42 iourt43 moh mohw oa081 punkbuster q3 ro2 smg smg11 sof2 sof2pm wop wop15').split(' ')
+);
 const POLL_MS = 4000;
 // the service writes status.json at least every 15 s; allow some clock difference between browser and server
 const STALE_SECONDS = 120;
@@ -107,20 +112,29 @@ export function B3Section({
       const root = await apiClient.listServerFiles(serverId, B3_DIR).catch(() => null);
       setInstalled(Boolean(root));
       if (root) {
-        const [conf, parserDir, app, appConf] = await Promise.all([
+        const [conf, parserDir, app, appConf, appParsers] = await Promise.all([
           apiClient.listServerFiles(serverId, `${B3_DIR}/conf`).catch(() => null),
           apiClient.listServerFiles(serverId, `${B3_DIR}/parsers`).catch(() => null),
           apiClient.listServerFiles(serverId, `${B3_DIR}/app`).catch(() => null),
           apiClient.listServerFiles(serverId, `${B3_DIR}/app/b3/conf`).catch(() => null),
+          apiClient.listServerFiles(serverId, `${B3_DIR}/app/b3/parsers`).catch(() => null),
         ]);
         const configFiles = (listing: typeof conf, dir: string) =>
           (listing?.entries ?? []).filter((e) => e.type === 'file' && CONFIG_FILE.test(e.name)).map((e) => `${dir}/${e.name}`).sort();
         // config paths are relative to b3/, the service accepts the same form
-        const files = [...configFiles(conf, 'conf'), ...configFiles(appConf, 'app/b3/conf')];
+        const all = [...configFiles(conf, 'conf'), ...configFiles(appConf, 'app/b3/conf')];
+        // main B3 configs only (b3.ini, b3.xml, b3_server2.ini …), not plugin configs or B3's example files
+        const name = (f: string) => f.slice(f.lastIndexOf('/') + 1);
+        const main = all.filter((f) => /^b3/i.test(name(f)) && !/example|distribution/i.test(name(f)));
+        const files = main.length ? main : all.filter((f) => !/^plugin_/i.test(name(f)) && !/example|distribution/i.test(name(f)));
         setOwnB3(Boolean(app?.entries.some((e) => e.type === 'file' && e.name === 'b3_run.py')));
         setConfigs(files);
         setConfig((current) => (files.includes(current) ? current : files.find((f) => /\/b3\.(ini|xml)$/i.test(f)) ?? files[0] ?? ''));
-        setParsers((parserDir?.entries ?? []).filter((e) => e.type === 'file' && e.name.endsWith('.py')).map((e) => e.name.replace(/\.py$/, '')));
+        // own parsers: b3/parsers plus the ones inside an uploaded B3 that B3 1.12 does not have
+        const parserNames = (listing: typeof conf) =>
+          (listing?.entries ?? []).filter((e) => e.type === 'file' && e.name.endsWith('.py')).map((e) => e.name.replace(/\.py$/, ''));
+        const own = new Set([...parserNames(parserDir), ...parserNames(appParsers).filter((n) => !STOCK_PARSERS.has(n))]);
+        setParsers([...own].sort());
       }
       // what B3 needs from the game server, taken from the LinuxGSM config the Command line card edits
       const sources = await Promise.all(
@@ -284,7 +298,7 @@ export function B3Section({
             </div>
             <div className={row}>
               <span className={key}>Your parsers</span>
-              <span className={val}>{parsers.length ? parsers.join(', ') : 'none (built-in parsers: cod4, cod4gr …)'}</span>
+              <span className={val}>{parsers.length ? `${parsers.join(', ')} (use the name in "parser:")` : 'none (built-in parsers: cod4, cod4gr …)'}</span>
             </div>
             <div className={row}>
               <span className={key}>game_log</span>
