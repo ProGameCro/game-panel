@@ -10,6 +10,7 @@ import { CS2Sections, type CS2SectionsProps } from './serverSettings/CS2ConfigTa
 import { GarrysModSections, type GarrysModSectionsProps } from './serverSettings/GarrysModTab';
 import { RustSections, type RustSectionsProps } from './serverSettings/RustTab';
 import { ValheimSections, type ValheimSectionsProps } from './serverSettings/ValheimTab';
+import { Cod4ModSection, type Cod4ModSectionProps } from './serverSettings/Cod4ModSection';
 import { AppButton, AppInput, AppSelect, AppSlider, AppToggle, InfoTip } from '../src/ui/components';
 import {
   type CatalogGameDefinition,
@@ -51,6 +52,7 @@ interface GameConfigTabProps {
   garrysModProps?: GarrysModSectionsProps | null;
   rustProps?: RustSectionsProps | null;
   valheimProps?: ValheimSectionsProps | null;
+  cod4Props?: Omit<Cod4ModSectionProps, 'canReadFileManager' | 'canWriteFileManager' | 'onOpenFileManagerPath'> | null;
   ovhcloudConfigFiles?: string[];
 }
 
@@ -171,6 +173,7 @@ export function GameConfigTab({
   garrysModProps,
   rustProps,
   valheimProps,
+  cod4Props,
   ovhcloudConfigFiles,
 }: GameConfigTabProps) {
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -676,7 +679,7 @@ export function GameConfigTab({
   const borderColor = 'border-gray-700';
   const textPrimary = 'text-white';
   const textSecondary = 'text-gray-400';
-  const hasGameConfiguration = detectedConfigFiles.length > 0 || verifiedConfigFiles.length > 0 || Boolean(minecraftProps) || Boolean(hytaleProps) || Boolean(palworldProps) || Boolean(projectZomboidProps) || Boolean(cs2Props) || Boolean(garrysModProps) || Boolean(rustProps) || Boolean(valheimProps);
+  const hasGameConfiguration = detectedConfigFiles.length > 0 || verifiedConfigFiles.length > 0 || Boolean(minecraftProps) || Boolean(hytaleProps) || Boolean(palworldProps) || Boolean(projectZomboidProps) || Boolean(cs2Props) || Boolean(garrysModProps) || Boolean(rustProps) || Boolean(valheimProps) || Boolean(cod4Props);
   const showSaveSuccessToast = Boolean(saveSuccessMessage && !configChanged);
   const showBottomStatusPanel = Boolean(saveError);
 
@@ -991,6 +994,17 @@ export function GameConfigTab({
                 {...valheimProps}
                 canReadFileManager={canReadFileManager}
                 onOpenFileManagerPath={openFileInFileManager}
+              />
+            </div>
+          )}
+
+          {cod4Props && (
+            <div className="px-1 sm:px-2">
+              <Cod4ModSection
+                {...cod4Props}
+                canReadFileManager={canReadFileManager}
+                canWriteFileManager={canWriteFileManager}
+                onOpenFileManagerPath={onOpenFileManagerPath ? openFileInFileManager : undefined}
               />
             </div>
           )}

@@ -83,6 +83,14 @@ export function ServerSettingsModal({
   const isRustOvhcloud = ovhcloudFamily === 'rust';
   const isValheimOvhcloud = ovhcloudFamily === 'valheim';
   const isGarrysModOvhcloud = ovhcloudFamily === 'garrys-mod';
+  // Call of Duty 4 runs through LinuxGSM; its mod is a launch parameter, edited in the Game config tab
+  const cod4GameServerName = (() => {
+    if (!isLinuxGSMGame) return null;
+    try {
+      const meta = JSON.parse(serverProviderMetadataJson ?? '{}');
+      return String(meta?.shortname ?? '').toLowerCase() === 'cod4' ? String(meta?.gameservername || 'cod4server') : null;
+    } catch { return null; }
+  })();
   const isCS2Ovhcloud = (() => {
     if (serverProvider !== 'ovhcloud') return false;
     try {
@@ -1020,6 +1028,15 @@ export function ServerSettingsModal({
               onReinstallStarted: onClose,
               canManageEnv,
               canEditContainerConfig,
+              borderColor,
+              contentBg,
+              textPrimary,
+              textSecondary,
+            } : null}
+            cod4Props={cod4GameServerName && serverId ? {
+              serverId,
+              serverStatus,
+              gameServerName: cod4GameServerName,
               borderColor,
               contentBg,
               textPrimary,
