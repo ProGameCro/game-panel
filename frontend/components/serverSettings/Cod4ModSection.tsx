@@ -8,8 +8,9 @@ import { RestartToApplyNote } from './RestartToApplyNote';
 // +set sv_authtoken, r_xassetnum (materials / xanims / xmodels), +set fs_game and +set rcon_password.
 // - startparameters is written to the instance config (<gameservername>.cfg), which LinuxGSM
 //   reads last of the normal configs, so it overrides _default.cfg and survives LinuxGSM updates;
-// - the RCON password and the auth token are kept in secrets-common.cfg (LinuxGSM's file for secrets), never in server.cfg;
-//   the command line only references ${rconpassword} / ${authtoken};
+// - the RCON password is written straight into the command line (never server.cfg); LinuxGSM runs that line through a
+//   shell, so the password is limited to characters the shell leaves alone;
+// - the auth token is kept in secrets-common.cfg (LinuxGSM's file for secrets); the command line references ${authtoken};
 // - fs_game, sv_authtoken and r_xassetnum go before the first +map/+exec; rcon_password goes last so it wins over server.cfg.
 
 export interface Cod4ModSectionProps {
@@ -26,13 +27,13 @@ export interface Cod4ModSectionProps {
 }
 
 type Assets = { material: string; xanim: string; xmodel: string };
-export type Cod4CommandLine = { mod: string; auth: boolean; assets: Assets; custom: boolean; rcon: boolean };
+export type Cod4CommandLine = { mod: string; auth: boolean; assets: Assets; custom: boolean; rcon: string };
 
 const MOD_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const TOKEN_PATTERN = /^[A-Za-z0-9._-]{8,128}$/;
 // no spaces, quotes, $ or shell characters: the value is expanded unquoted by LinuxGSM
-const PASSWORD_PATTERN = /^[A-Za-z0-9!@#%^*()_+=.,:-]{6,64}$/;
-const PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#%*_-+=';
+const PASSWORD_PATTERN = /^[A-Za-z0-9@%_+=.,:-]{6,64}$/;
+const PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@%_-+=.';
 const ASSET_LIMIT = 65535;
 const NO_MOD = '__none__';
 
@@ -69,7 +70,7 @@ export const parseCommandLine = (parameters: string): Cod4CommandLine => {
     auth: /\+set\s+sv_authtoken\s/i.test(parameters),
     assets: { material: asset('material'), xanim: asset('xanim'), xmodel: asset('xmodel') },
     custom: parameters.includes(CUSTOM_REFERENCE),
-    rcon: /\+set\s+rcon_password\s/i.test(parameters),
+    rcon: /\+set\s+rcon_password\s+(?:"([^"]*)"|(\S+))/i.exec(parameters)?.slice(1).find((v) => v !== undefined) ?? '',
   };
 };
 
@@ -94,7 +95,7 @@ export const buildCommandLine = (parameters: string, wanted: Cod4CommandLine): s
     .join(' ');
   const at = base.search(EARLY_AT);
   const withEarly = !early ? base : at >= 0 ? `${base.slice(0, at)}${early} ${base.slice(at)}` : `${base} ${early}`;
-  return tidy([withEarly, wanted.custom && CUSTOM_REFERENCE, wanted.rcon && '+set rcon_password ${rconpassword}'].filter(Boolean).join(' '));
+  return tidy([withEarly, wanted.custom && CUSTOM_REFERENCE, wanted.rcon && `+set rcon_password ${wanted.rcon}`].filter(Boolean).join(' '));
 };
 
 // kept for the earlier mod-only callers and tests
@@ -222,7 +223,7 @@ export function Cod4ModSection({
         material: line.assets.material,
         xanim: line.assets.xanim,
         xmodel: line.assets.xmodel,
-        rcon: line.rcon ? secretOf('rconpassword') : '',
+        rcon: line.rcon === '${rconpassword}' ? secretOf('rconpassword') : line.rcon,
       };
       setMods(folders);
       setParameters(effective);
@@ -261,7 +262,7 @@ export function Cod4ModSection({
   const invalid = Object.values(problems).some(Boolean);
   const current = { mod, auth, ...assets, rcon };
   const changed = (Object.keys(current) as (keyof typeof current)[]).some((k) => current[k] !== initial[k]);
-  const wanted: Cod4CommandLine = { mod, auth: auth !== '', assets, custom: keepCustom, rcon: rcon !== '' };
+  const wanted: Cod4CommandLine = { mod, auth: auth !== '', assets, custom: keepCustom, rcon };
   const preview = parameters === null ? '' : buildCommandLine(parameters, wanted);
 
   const options = useMemo(
@@ -276,8 +277,10 @@ export function Cod4ModSection({
     setSaved(false);
     try {
       let secrets = secretsContent;
-      secrets = auth ? upsertCfgValue(secrets, 'authtoken', auth) : removeCfgKey(secrets, 'authtoken');
-      secrets = rcon ? upsertCfgValue(secrets, 'rconpassword', rcon) : removeCfgKey(secrets, 'rconpassword');
+      if (auth) secrets = upsertCfgValue(secrets, 'authtoken', auth);
+      else if (initial.auth) secrets = removeCfgKey(secrets, 'authtoken');
+      // the RCON password lives only in the command line now
+      secrets = removeCfgKey(secrets, 'rconpassword');
       const instance = upsertCfgValue(instanceContent, 'startparameters', preview);
       if (secrets !== secretsContent) await apiClient.updateServerFile(serverId, paths.secretsCommon, secrets);
       await apiClient.updateServerFile(serverId, paths.instance, instance);
@@ -307,8 +310,8 @@ export function Cod4ModSection({
             <Terminal className="h-4 w-4 text-sky-300" /> Command line
           </h3>
           <p className={`mt-1 text-sm ${textSecondary}`}>
-            Start options of the CoD4 server. Empty fields are left out. The RCON password and the auth token are stored in{' '}
-            <code>{paths.secretsCommon}</code>, not in server.cfg.
+            Start options of the CoD4 server. Empty fields are left out. The RCON password goes straight into the start command, the auth token is stored in{' '}
+            <code>{paths.secretsCommon}</code>. Nothing is written to server.cfg.
           </p>
         </div>
         <div className="flex gap-2">
@@ -423,7 +426,7 @@ export function Cod4ModSection({
             )}
           </div>
           <span className={hint}>Set after server.cfg, so it counts even if server.cfg has its own rcon_password.</span>
-          {problems.rcon && <span className={bad}>Letters, numbers and ! @ # % ^ * ( ) _ + = . , : - only, no spaces or quotes.</span>}
+          {problems.rcon && <span className={bad}>6–64 characters: letters, numbers and @ % _ + = . , : - only.</span>}
         </div>
 
       </div>
@@ -443,7 +446,7 @@ export function Cod4ModSection({
           <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
           <span>
             Saved to {paths.instance}
-            {auth || rcon ? ` and ${paths.secretsCommon}` : ''}.
+            {auth ? ` and ${paths.secretsCommon}` : ''}.
           </span>
         </div>
       )}
