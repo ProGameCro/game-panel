@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getConfig } from '../../../../config.js';
 import { logInfo, logWarn } from '../../../../utils/logger.js';
+import { applyLinuxGsmConfigPatches } from '../linuxGsmConfig.js';
 import { runGenericBeforeContainerCreate } from '../generic/index.js';
 import type {
     AfterContainerStartContext,
@@ -31,9 +32,22 @@ export async function copyCod4Template(dataDir: string): Promise<boolean> {
     return true;
 }
 
+// slots chosen in the install form (COD4_MAXPLAYERS), written as LinuxGSM's maxplayers (+set sv_maxclients)
+export function cod4MaxPlayers(env: string[] | undefined): number | null {
+    const raw = (env ?? []).find((entry) => entry.startsWith('COD4_MAXPLAYERS='))?.slice('COD4_MAXPLAYERS='.length).trim() ?? '';
+    const value = Number(raw);
+    return /^\d+$/.test(raw) && value >= 1 && value <= 64 ? value : null;
+}
+
 export const cod4Adapter: GameAdapter = {
     async beforeContainerCreate(ctx: BeforeContainerCreateContext): Promise<void> {
         await runGenericBeforeContainerCreate(ctx);
+        const slots = cod4MaxPlayers(ctx.env);
+        if (slots !== null) {
+            await applyLinuxGsmConfigPatches({ dataDir: ctx.dataDir, gameServerName: ctx.gameServerName }, [
+                { fileName: `${ctx.gameServerName}.cfg`, values: { maxplayers: String(slots) } },
+            ]);
+        }
         try {
             if (await copyCod4Template(ctx.dataDir)) {
                 logInfo('LINUXGSM:COD4', 'Game files copied from the local template, no download needed', { serverId: ctx.serverId });

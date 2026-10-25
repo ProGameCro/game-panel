@@ -9,6 +9,8 @@ export type BeforeContainerCreateContext = {
     gameServerName: string;
     dataDir: string;
     steamCredentials: SteamCredentials | null;
+    // the server's environment variables (KEY=VALUE)
+    env?: string[];
 };
 
 export type AfterContainerStartContext = {

@@ -363,6 +363,7 @@ interface ConfigModalProps {
   showProjectZomboidFields?: boolean;
   showRustFields?: boolean;
   showValheimFields?: boolean;
+  showCod4Fields?: boolean;
   usedServerNames?: string[];
   requireSteamCredentials?: boolean;
   steamUsername?: string;
@@ -401,6 +402,7 @@ function ConfigModal({
   showProjectZomboidFields,
   showRustFields,
   showValheimFields,
+  showCod4Fields,
   usedServerNames,
   requireSteamCredentials, steamUsername, setSteamUsername, steamPassword, setSteamPassword,
   requireGameCopy,
@@ -493,6 +495,17 @@ function ConfigModal({
   const setValheimPassword = (val: string) => upsertEnv('VALHEIM_SERVER_PASSWORD', val);
   // A listed server needs a password of at least 5 characters or the game refuses to start.
   const valheimPasswordTooShort = Boolean(showValheimFields) && valheimPassword.trim().length < 5;
+
+  // Call of Duty 4 slots: the backend writes them as LinuxGSM's maxplayers (+set sv_maxclients)
+  const cod4Slots = envRows.find((r) => r.key.trim().toUpperCase() === 'COD4_MAXPLAYERS')?.value ?? '';
+  const setCod4Slots = (val: string) => upsertEnv('COD4_MAXPLAYERS', val);
+  const cod4SlotsInvalid =
+    Boolean(showCod4Fields) && !(/^\d+$/.test(cod4Slots.trim()) && Number(cod4Slots) >= 1 && Number(cod4Slots) <= 64);
+  React.useEffect(() => {
+    if (showCod4Fields && !envRows.some((r) => r.key.trim().toUpperCase() === 'COD4_MAXPLAYERS')) {
+      setEnvRows([...envRows, { key: 'COD4_MAXPLAYERS', value: '32' }]);
+    }
+  }, [showCod4Fields, envRows, setEnvRows]);
 
   const rustEnvSeeded = React.useRef(false);
   React.useEffect(() => {
@@ -632,6 +645,24 @@ function ConfigModal({
                   Must be at least 5 characters.
                 </p>
               )}
+            </div>
+          )}
+
+          {showCod4Fields && (
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                Slots
+                <InfoTip text="Maximum number of players (sv_maxclients), 1 to 64. You can change it later in Settings > Game config > Command line." />
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={64}
+                value={cod4Slots}
+                onChange={(e) => setCod4Slots(e.target.value)}
+                className={`${inputCls} max-w-[10rem]`}
+              />
+              {cod4SlotsInvalid && <p className="mt-1.5 text-xs text-red-400">Enter a number from 1 to 64.</p>}
             </div>
           )}
 
@@ -956,7 +987,7 @@ function ConfigModal({
               className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 text-gray-700 dark:text-white border border-gray-300 dark:border-gray-600/50 transition-all">
               Cancel
             </AppButton>
-            <AppButton tone="primary" onClick={onConfirm} disabled={loading || !serverName.trim() || eulaBlocked || rustRconTooShort || valheimPasswordTooShort}
+            <AppButton tone="primary" onClick={onConfirm} disabled={loading || !serverName.trim() || eulaBlocked || rustRconTooShort || valheimPasswordTooShort || cod4SlotsInvalid}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
               {loading ? 'Installing…' : 'Install'}
               <ArrowRight className="w-4 h-4" />
@@ -1014,6 +1045,7 @@ export function InstallGameServer({
   const [showValheim, setShowValheim] = useState(false);
   const [showProjectZomboid, setShowProjectZomboid] = useState(false);
   const [showRust, setShowRust] = useState(false);
+  const [showCod4, setShowCod4] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
   const [mountRows, setMountRows] = useState<MountRow[]>([]);
   const [healthcheckFromCatalog, setHealthcheckFromCatalog] = useState<Record<string, unknown> | null>(null);
@@ -1090,6 +1122,7 @@ export function InstallGameServer({
     setShowProjectZomboid(false);
     setShowRust(false);
     setShowValheim(false);
+    setShowCod4(false);
     setConfigError(null);
     setMountRows([]);
     setHealthcheckFromCatalog(null);
@@ -1172,6 +1205,7 @@ export function InstallGameServer({
     setConfigTitle(`Install ${game.gamename}`);
     setConfigSubtitle('');
     setConfigProvider('linuxgsm');
+    setShowCod4(game.shortname === 'cod4');
     setServerName(makeUniqueServerName(`${game.gamename} Server`, usedServerNames));
     setTcpPorts([]);
     setUdpPorts([]);
@@ -1705,6 +1739,7 @@ export function InstallGameServer({
           showProjectZomboidFields={showProjectZomboid}
           showRustFields={showRust}
           showValheimFields={showValheim}
+          showCod4Fields={showCod4}
           usedServerNames={usedServerNames}
           requireSteamCredentials={requireSteamCredentials || undefined}
           steamUsername={steamUsername}

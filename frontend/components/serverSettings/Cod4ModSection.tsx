@@ -205,13 +205,15 @@ export function Cod4ModSection({
   const [parameters, setParameters] = useState<string | null>(null);
   const [instanceContent, setInstanceContent] = useState('');
   const [secretsContent, setSecretsContent] = useState('');
-  const [initial, setInitial] = useState({ mod: '', auth: '', material: '', xanim: '', xmodel: '', rcon: '' });
+  const [initial, setInitial] = useState({ mod: '', auth: '', material: '', xanim: '', xmodel: '', rcon: '', slots: '' });
 
   const [selected, setSelected] = useState(NO_MOD);
   const [typed, setTyped] = useState('');
   const [auth, setAuth] = useState('');
   const [assets, setAssets] = useState<Assets>({ material: '', xanim: '', xmodel: '' });
   const [rcon, setRcon] = useState('');
+  // LinuxGSM's maxplayers, used by the command line as +set sv_maxclients ${maxplayers}
+  const [slots, setSlots] = useState('');
   // ${customparameters} is kept where LinuxGSM's config already has it
   const [keepCustom, setKeepCustom] = useState(false);
 
@@ -243,6 +245,7 @@ export function Cod4ModSection({
         xanim: line.assets.xanim,
         xmodel: line.assets.xmodel,
         rcon: line.rcon === '${rconpassword}' ? secretOf('rconpassword') : line.rcon,
+        slots: sources.map((c) => readCfgValue(c, 'maxplayers')).find((v) => v !== null) ?? '',
       };
       setMods(folders);
       setParameters(effective);
@@ -254,6 +257,7 @@ export function Cod4ModSection({
       setAuth(values.auth);
       setAssets({ material: values.material, xanim: values.xanim, xmodel: values.xmodel });
       setRcon(values.rcon);
+      setSlots(values.slots);
       setKeepCustom(line.custom);
       if (effective === null) {
         setError(`Could not find "startparameters" in ${paths.defaults}. Start the server once so LinuxGSM creates its config, then reload.`);
@@ -277,9 +281,10 @@ export function Cod4ModSection({
     xanim: !validAsset(assets.xanim),
     xmodel: !validAsset(assets.xmodel),
     rcon: rcon !== '' && !PASSWORD_PATTERN.test(rcon),
+    slots: slots !== '' && !(/^\d+$/.test(slots) && Number(slots) >= 1 && Number(slots) <= 64),
   };
   const invalid = Object.values(problems).some(Boolean);
-  const current = { mod, auth, ...assets, rcon };
+  const current = { mod, auth, ...assets, rcon, slots };
   const wanted: Cod4CommandLine = { mod, auth: auth !== '', assets, custom: keepCustom, rcon };
   const preview = parameters === null ? '' : buildCommandLine(parameters, wanted);
   // also when the saved line only needs rewriting (e.g. an old "+set rcon_password" moved to "+rcon_password")
@@ -303,7 +308,8 @@ export function Cod4ModSection({
       else if (initial.auth) secrets = removeCfgKey(secrets, 'authtoken');
       // the RCON password lives only in the command line now
       secrets = removeCfgKey(secrets, 'rconpassword');
-      const instance = upsertCfgValue(instanceContent, 'startparameters', preview);
+      let instance = upsertCfgValue(instanceContent, 'startparameters', preview);
+      if (slots && slots !== initial.slots) instance = upsertCfgValue(instance, 'maxplayers', slots, 'startparameters');
       if (secrets !== secretsContent) await writeServerFile(serverId, paths.secretsCommon, secrets);
       await writeServerFile(serverId, paths.instance, instance);
       setSaved(true);
@@ -349,6 +355,24 @@ export function Cod4ModSection({
       </div>
 
       <div className="mt-4 grid gap-4 rounded-lg border border-sky-500/50 bg-sky-500/5 p-4">
+        <label className={row}>
+          <span className={label}>Slots</span>
+          <AppInput
+            type="number"
+            min={1}
+            max={64}
+            value={slots}
+            className="w-full max-w-[10rem]"
+            onChange={(event) => {
+              setSlots(event.target.value.trim());
+              setSaved(false);
+            }}
+            disabled={disabled}
+          />
+          <span className={hint}>Maximum players (sv_maxclients, LinuxGSM maxplayers), 1 to 64.</span>
+          {problems.slots && <span className={bad}>Enter a number from 1 to 64.</span>}
+        </label>
+
         <label className={row}>
           <span className={label}>+set sv_authtoken</span>
           <SecretInput
