@@ -53,7 +53,7 @@ type B3Status = {
 };
 
 const B3_DIR = 'b3';
-const FOLDERS = ['conf', 'parsers', 'extplugins', 'logs'];
+const FOLDERS = ['logs'];
 const CONFIG_FILE = /\.(ini|xml)$/i;
 // parsers and helper modules of the built-in B3 (B3 1.12 plus cod4x); anything else in a parsers folder is the user's own
 const STOCK_PARSERS = new Set(
@@ -75,63 +75,82 @@ export const setConfigValues = (text: string, xml: boolean, values: Record<strin
     return re.test(out) ? out.replace(re, (_m, head: string) => `${head} ${value}`) : out;
   }, text);
 
-/** Ready-to-use b3.ini for this server (B3's distribution config with the server's values filled in). */
-const defaultConfig = (v: { database: string; rcon: string; port: string; gameLog: string }) => `# B3 config made by the panel (Install B3). Edit it in the file manager, then restart B3.
-[b3]
-parser: cod4x
-database: ${v.database}
-bot_name: b3
-bot_prefix: ^0(^2b3^0)^7:
-time_format: %I:%M%p %Z %m/%d/%y
-time_zone: UTC
-log_level: 9
-logfile: /data/b3/logs/b3.log
-disabled_plugins:
-external_plugins_dir: @b3/extplugins
+const xmlEscape = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-[server]
-rcon_password: ${v.rcon || 'set-the-rcon-password'}
-port: ${v.port || '28960'}
-game_log: ${v.gameLog}
-public_ip: 127.0.0.1
-rcon_ip: 127.0.0.1
-punkbuster: off
-delay: 0.33
-lines_per_second: 50
-permban_with_frozensand: no
-tempban_with_frozensand: no
-
-[autodoc]
-type: html
-maxlevel: 100
-destination: /data/b3/logs/b3_doc.html
-
-[update]
-channel: skip
-
-[messages]
-kicked_by: $clientname^7 was kicked by $adminname^7 $reason
-kicked: $clientname^7 was kicked $reason
-banned_by: $clientname^7 was banned by $adminname^7 $reason
-banned: $clientname^7 was banned $reason
-temp_banned_by: $clientname^7 was temp banned by $adminname^7 for $banduration^7 $reason
-temp_banned: $clientname^7 was temp banned for $banduration^7 $reason
-unbanned_by: $clientname^7 was un-banned by $adminname^7 $reason
-unbanned: $clientname^7 was un-banned^7 $reason
-
-# @b3 is your B3 in b3/app/b3, so these plugin configs are the files in b3/app/b3/conf
-[plugins]
-admin: @b3/conf/plugin_admin.ini
-adv: @b3/conf/plugin_adv.xml
-censor: @b3/conf/plugin_censor.xml
-cmdmanager: @b3/conf/plugin_cmdmanager.ini
-pingwatch: @b3/conf/plugin_pingwatch.ini
-pluginmanager: @b3/conf/plugin_pluginmanager.ini
-spamcontrol: @b3/conf/plugin_spamcontrol.ini
-stats: @b3/conf/plugin_stats.ini
-status: @b3/conf/plugin_status.ini
-tk: @b3/conf/plugin_tk.ini
-welcome: @b3/conf/plugin_welcome.ini
+/** Ready-to-use b3.xml for this server (the user's CWP-Bot config with the server's values filled in). */
+const defaultConfig = (v: { database: string; rcon: string; port: string; gameLog: string }) => `<configuration>
+<!--
+ B3 main config, made by the panel (Install B3). For any change made in this config file, restart the bot.
+ Whenever you can specify a file/directory path, the following shortcuts can be used:
+    @b3 : the folder where B3 code is installed in (b3/app/b3)
+    @conf : the folder containing this config file
+ -->
+    <settings name="b3">
+        <set name="parser">cod4x</set>
+        <!-- Your database info: [protocol]://[db-user]:[db-password]@[db-server[:port]]/[db-name] -->
+        <set name="database">${xmlEscape(v.database)}</set>
+        <set name="bot_name">CWP-Bot</set>
+        <set name="bot_prefix">^0(^5CWP-Bot5^0)^5:</set>
+        <set name="time_format">%I:%M%p %Z %m/%d/%y</set>
+        <set name="time_zone">CEST</set>
+        <!-- How much detail in the b3 logfile: 9 = verbose, 10 = debug, 21 = bot, 22 = console -->
+        <set name="log_level">9</set>
+        <set name="logfile">b3.log</set>
+    </settings>
+    <settings name="server">
+        <!-- The RCON password of the game server (Command line card) -->
+        <set name="rcon_password">${xmlEscape(v.rcon || 'set-the-rcon-password')}</set>
+        <set name="port">${xmlEscape(v.port || '28960')}</set>
+        <!-- B3 sees this server's folder as /data -->
+        <set name="game_log">${xmlEscape(v.gameLog)}</set>
+        <!-- B3 runs on the same machine as the game server -->
+        <set name="public_ip">127.0.0.1</set>
+        <set name="rcon_ip">127.0.0.1</set>
+        <set name="punkbuster">off</set>
+        <set name="delay">0.33</set>
+        <set name="lines_per_second">50</set>
+    </settings>
+    <settings name="autodoc">
+        <set name="type">html</set>
+        <set name="maxlevel">100</set>
+    </settings>
+    <settings name="update">
+        <set name="channel">stable</set>
+    </settings>
+    <settings name="messages">
+        <set name="kicked_by">$clientname^7 was kicked by $adminname^7 $reason</set>
+        <set name="kicked">$clientname^7 was kicked $reason</set>
+        <set name="banned_by">$clientname^7 was banned by $adminname^7 $reason</set>
+        <set name="banned">$clientname^7 was banned $reason</set>
+        <set name="temp_banned_by">$clientname^7 was temp banned by $adminname^7 for $banduration^7 $reason</set>
+        <set name="temp_banned">$clientname^7 was temp banned for $banduration^7 $reason</set>
+        <set name="unbanned_by">$clientname^7 was un-banned by $adminname^7 $reason</set>
+        <set name="unbanned">$clientname^7 was un-banned^7 $reason</set>
+    </settings>
+    <settings name="plugins">
+        <set name="external_dir">@b3/extplugins</set>
+    </settings>
+    <plugins>
+        <plugin name="admin" config="@b3/conf/plugin_admin.ini" />
+        <plugin name="adv" config="@b3/conf/plugin_adv.xml" />
+        <plugin name="banlist" config="@b3/conf/plugin_banlist.xml" />
+        <plugin name="censor" config="@b3/conf/plugin_censor.xml" />
+        <plugin name="cmdmanager" config="@b3/conf/plugin_cmdmanager.ini" />
+        <plugin name="pingwatch" config="@b3/conf/plugin_pingwatch.ini" />
+        <plugin name="pluginmanager" config="@b3/conf/plugin_pluginmanager.ini" />
+        <plugin name="stats" config="@b3/conf/plugin_stats.ini" />
+        <plugin name="status" config="@b3/conf/plugin_status.ini" />
+        <plugin name="welcome" config="@b3/conf/plugin_welcome.ini" />
+        <plugin name="countryfilter" config="@b3/conf/plugin_countryfilter.ini" />
+        <plugin name="customcommands" config="@b3/conf/plugin_customcommands.ini" />
+        <plugin name="firstkill" config="@b3/conf/plugin_firstkill.ini" />
+        <plugin name="geowelcome" config="@b3/conf/plugin_geowelcome.ini" />
+        <plugin name="location" config="@b3/conf/plugin_location.ini" />
+        <plugin name="ipban" config="@b3/conf/plugin_ipban.ini" />
+        <plugin name="nickreg" config="@b3/conf/plugin_nickreg.ini" />
+        <plugin name="spawnkill" config="@b3/conf/plugin_spawnkill.ini" />
+    </plugins>
+</configuration>
 `;
 const POLL_MS = 4000;
 // the service writes status.json at least every 15 s; allow some clock difference between browser and server
@@ -140,17 +159,15 @@ const LOG_LINES = 40;
 
 const README = `B3 (BigBrotherBot) for this server
 ==================================
-conf/        your b3.ini or b3.xml and the plugin configs
-parsers/     your parser files (.py), for example cod4x.py -> "parser: cod4x"
-extplugins/  your plugins (.py files or folders)
-logs/        console.log (B3 output)
-app/         your B3 (big-brother-bot-master.zip, put here by Install B3). This B3 is what runs:
-             edit its files here, e.g. plugins in app/b3/extplugins and plugin configs in app/b3/conf.
-             You can also replace it with another B3 (the folder with b3_run.py).
+This folder is your B3 (big-brother-bot-master.zip, put here by Install B3) and it is the B3 that runs.
+b3/conf/b3.xml    main config (made by Install B3 with this server's RCON, port, game_log and database)
+b3/conf/          plugin configs (@b3/conf in b3.xml)
+b3/extplugins/    extra plugins
+logs/             console.log (B3 output)
+control.json, status.json: used by the panel to start / stop B3
 
 Inside B3 this server folder is /data, for example:
   game_log: /data/serverfiles/main/games_mp.log
-  logfile:  /data/b3/logs/b3.log
 RCON: rcon_ip 127.0.0.1 and the server port. Start / stop B3 in Settings > Game config > B3.
 `;
 
@@ -175,7 +192,8 @@ export function B3Section({
   const [configs, setConfigs] = useState<string[]>([]);
   const [parsers, setParsers] = useState<string[]>([]);
   const [config, setConfig] = useState('');
-  const [appRoot, setAppRoot] = useState('');
+  // folder of the B3 that runs, relative to b3/ ('' = b3/ itself); null = none uploaded
+  const [appRoot, setAppRoot] = useState<string | null>(null);
   const [appWithoutB3, setAppWithoutB3] = useState(false);
   const [confirmUninstall, setConfirmUninstall] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -214,9 +232,11 @@ export function B3Section({
           list('parsers'),
           list('app'),
         ]);
-        // own B3: b3/app/b3_run.py, or one folder deeper (uploading a folder or zip adds one level)
-        let appRoot = '';
-        if (app?.entries.some((e) => e.type === 'file' && e.name === 'b3_run.py')) {
+        // the B3: directly in b3/ (Install B3 puts it there), or in b3/app, or one folder deeper
+        let appRoot: string | null = null;
+        if (root.entries.some((e) => e.type === 'file' && e.name === 'b3_run.py')) {
+          appRoot = '';
+        } else if (app?.entries.some((e) => e.type === 'file' && e.name === 'b3_run.py')) {
           appRoot = 'app';
         } else {
           for (const dir of (app?.entries ?? []).filter((e) => e.type === 'dir').slice(0, 10)) {
@@ -227,19 +247,20 @@ export function B3Section({
             }
           }
         }
-        const [appConf, appParsers] = appRoot
-          ? await Promise.all([list(`${appRoot}/b3/conf`), list(`${appRoot}/b3/parsers`)])
-          : [null, null];
+        const pre = appRoot ? `${appRoot}/` : '';
+        const [appConf, appParsers] =
+          appRoot !== null ? await Promise.all([list(`${pre}b3/conf`), list(`${pre}b3/parsers`)]) : [null, null];
         const configFiles = (listing: typeof conf, dir: string) =>
           (listing?.entries ?? [])
             .filter((e) => e.type === 'file' && CONFIG_FILE.test(e.name))
             .map((e) => (dir ? `${dir}/${e.name}` : e.name))
             .sort();
         // config paths are relative to b3/, the service accepts the same form
+        // your B3's own conf folder first: that is where B3 keeps its config
         const all = [
+          ...(appRoot !== null ? configFiles(appConf, `${pre}b3/conf`) : []),
           ...configFiles(conf, 'conf'),
           ...configFiles(root, ''),
-          ...(appRoot ? configFiles(appConf, `${appRoot}/b3/conf`) : []),
         ];
         // main B3 configs only (b3.ini, b3.xml, b3_server2.ini …), not plugin configs or B3's example files
         const name = (f: string) => f.slice(f.lastIndexOf('/') + 1);
@@ -250,7 +271,7 @@ export function B3Section({
           ? main
           : all.filter((f) => !/^plugin_/i.test(name(f)) && !/example|distribution/i.test(name(f)));
         setAppRoot(appRoot);
-        setAppWithoutB3(Boolean(app && !appRoot && app.entries.length > 0));
+        setAppWithoutB3(Boolean(app && appRoot === null && app.entries.length > 0));
         setConfigs(files);
         setConfig((current) =>
           files.includes(current)
@@ -348,9 +369,16 @@ export function B3Section({
         }
         if (current.lastAction?.id === id && current.lastAction.result === 'error') throw new Error(current.lastAction.message ?? 'Install failed.');
       }
-      // a ready b3.ini, unless the user already has a config
-      if (!(await readOptional(serverId, `${B3_DIR}/conf/b3.ini`)) && !(await readOptional(serverId, `${B3_DIR}/conf/b3.xml`))) {
-        await writeServerFile(serverId, `${B3_DIR}/conf/b3.ini`, defaultConfig({ ...server, database: current.database?.url || DATABASE_PLACEHOLDER }));
+      // a ready b3.xml in the B3's conf folder (b3/b3/conf), unless there is one already
+      const confDir =
+        (await readOptional(serverId, `${B3_DIR}/b3_run.py`)) !== null
+          ? `${B3_DIR}/b3/conf`
+          : (await readOptional(serverId, `${B3_DIR}/app/b3_run.py`)) !== null
+            ? `${B3_DIR}/app/b3/conf`
+            : `${B3_DIR}/conf`;
+      if (confDir === `${B3_DIR}/conf`) await apiClient.createServerDirectory(serverId, B3_DIR, 'conf').catch(() => undefined);
+      if (!(await readOptional(serverId, `${confDir}/b3.xml`)) && !(await readOptional(serverId, `${confDir}/b3.ini`))) {
+        await writeServerFile(serverId, `${confDir}/b3.xml`, defaultConfig({ ...server, database: current.database?.url || DATABASE_PLACEHOLDER }));
       }
       await load();
     } catch (e) {
@@ -474,9 +502,8 @@ export function B3Section({
             </span>
           </h3>
           <p className={`mt-1 text-sm ${textSecondary}`}>
-            Admin bot for the server. Upload your configs to <code>b3/conf</code>, parsers to{' '}
-            <code>b3/parsers</code> and plugins to <code>b3/extplugins</code>, or your whole B3 to{' '}
-            <code>b3/app</code>, then start B3.
+            Admin bot for the server. Install B3 puts your B3 (big-brother-bot-master.zip) into the server folder{' '}
+            <code>b3</code>, with its config in <code>b3/b3/conf/b3.xml</code>. Edit the files there, then start or restart B3.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -545,7 +572,7 @@ export function B3Section({
             <div className={row}>
               <span className={key}>B3</span>
               <span className={val}>
-                {appRoot
+                {appRoot !== null
                   ? `your B3 in b3/${appRoot}`
                   : 'your B3 from big-brother-bot-master.zip (B3 1.12 + cod4x parser)'}
                 {appWithoutB3 && (
