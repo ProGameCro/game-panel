@@ -2,7 +2,7 @@
 
 # 🎮 OVHcloud Game Panel
 
-> **This fork** adds Call of Duty 4 (CoD4X) tools: a Command line card, a B3 (BigBrotherBot) card, local templates and slots for new CoD4 servers. See [cod4/README.md](cod4/README.md).
+> **Ovaj fork** dodaje alate za **Call of Duty 4 (CoD4X)** i **B3**. Upute su odmah ispod, detalji u [cod4/README.md](cod4/README.md).
 
 
 ### Deploy and manage your game servers in minutes — from one clean, modern web interface.
@@ -14,6 +14,68 @@
 <img src="docs/assets/game-panel.png" alt="OVHcloud Game Panel" width="900">
 
 </div>
+
+<br>
+
+## 🔫 Call of Duty 4 (CoD4X) + B3: upute
+
+Dodaci za CoD4 servere instalirane preko LinuxGSM-a (Game Panel 1.6.0).
+
+### Što dobiješ
+
+| Gdje u panelu | Što |
+|---|---|
+| Server → **Settings → Game config → Command line** | Slots, `sv_authtoken`, Materials / Xanims / Xmodels, mod (`fs_game`), `rcon_password`. Ništa se ne upisuje u `server.cfg`, a RCON lozinka vrijedi i kad je `server.cfg` ima. |
+| Server → **Settings → Game config → B3 (BigBrotherBot)** | Install / Start / Stop / Restart / Uninstall, konzola, uređivanje `b3.xml`, logovi. |
+| **Instalacija novog CoD4 servera** | polje **Slots**; datoteke se kopiraju s tvog postojećeg servera umjesto skidanja; nema provjere update-a na GitHubu pri svakom startu. |
+| `https://<domena panela>/pma/` | **phpMyAdmin** za B3 bazu (MariaDB). |
+
+### Instalacija (na serveru gdje je panel, kao root)
+
+```bash
+cd ~
+for f in gp-cod4-cmdline.sh gp-b3.sh gp-cod4-template.sh gp-pma.sh gp-db-root.sh; do
+  curl -fsSLO https://raw.githubusercontent.com/ProGameCro/game-panel/main/cod4/install/$f
+done
+
+bash gp-cod4-cmdline.sh      # 1. Command line kartica
+bash gp-b3.sh                # 2. B3 kartica + B3 + MariaDB baza
+bash gp-cod4-template.sh     # 3. Slots i brži start za nove CoD4 servere
+bash gp-pma.sh               # 4. (po želji) phpMyAdmin
+```
+
+Zatim u pregledniku **Ctrl+Shift+R** na panelu. Sve skripte se smiju pokretati ponovno, a **nakon svake nadogradnje panela** ponovno pokreni 1–3.
+
+### B3 korak po korak
+
+1. U **Command line** kartici upiši `rcon_password` (ili *Generate*) → **Save** → restartaj server.
+2. U **B3** kartici **Install B3**: B3 se raspakira u folder servera `b3/`, a `b3/b3/conf/b3.xml` se napravi s RCON lozinkom, portom, game logom i bazom.
+3. **Start B3**, uđi na server i napiši **`!iamgod`** (postaješ Super Admin).
+
+- Config: kartica → **Edit b3/b3/conf/b3.xml** → *Save and restart B3*.
+- Pluginovi: `b3/b3/extplugins`, plugin configovi: `b3/b3/conf` (File manager).
+- Parser **`cod4x18`** radi bez plugina b3hide; ako server učitava b3hide, može i `cod4x`.
+- B3 vidi folder servera kao `/data` (npr. `game_log: /data/serverfiles/main/games_mp.log`).
+
+### Predložak za nove CoD4 servere
+
+```bash
+bash ~/gp-cod4-template.sh       # popis tvojih CoD4 servera
+bash ~/gp-cod4-template.sh 5     # datoteke servera 5 postaju predložak
+```
+
+Svaki novi CoD4 server tada odmah dobije te datoteke (CoD4X, modovi, mape) bez skidanja. Nakon promjene modova ili mapa pokreni ponovno.
+
+### Kad nešto ne radi
+
+| Problem | Rješenje |
+|---|---|
+| `Bad rcon` u konzoli servera | ista lozinka mora biti u Command line kartici i u `b3.xml` (*Write these values into …*), pa restart servera i B3. |
+| `!iamgod` ne radi | parser mora biti `cod4x18` (ili `cod4x` uz plugin b3hide); B3 mora raditi prije nego napišeš naredbu. |
+| ne radi root u phpMyAdminu | `bash ~/gp-db-root.sh` |
+| panel pokazuje staru karticu | Ctrl+Shift+R ili privatni prozor. |
+
+Lozinke baze i phpMyAdmina: `cat /etc/gamepanel-b3/db.env /etc/gamepanel-b3/pma.env`.
 
 <br>
 
