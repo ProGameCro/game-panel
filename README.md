@@ -134,10 +134,14 @@ Don't have the infrastructure yet? 🌐 [Domain name](https://www.ovhcloud.com/e
 
 ```bash
 sudo apt install git
-git clone https://github.com/ovh/game-panel.git
+git clone https://github.com/ProGameCro/game-panel.git
 cd game-panel
 sudo bash ./deploy/install.sh
 ```
+
+> This installs the panel from this fork, so the CoD4 **Command line** and **B3** cards are already in it. For B3 itself
+> (image, MariaDB, service), slots and templates still run `gp-b3.sh` and `gp-cod4-template.sh` from
+> [the CoD4 instructions](#-call-of-duty-4-cod4x--b3-how-to-use); they skip the panel parts that are already there.
 
 During installation, you'll be prompted for:
 
