@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { KeyRound, Moon, MoreVertical, PenLine, Power, Sparkles, Sun, X } from 'lucide-react';
 import { Icon, type IconName } from '@ovhcloud/ods-react';
 import { getAppVersion } from '../utils/appInfo';
@@ -841,7 +842,8 @@ export function Sidebar({
           </AppModalBody>
         </AppModalContent>
       </AppModal>
-      {renameOpen && (
+      {/* rendered on <body>: inside the fixed sidebar the page content would cover it */}
+      {renameOpen && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4" onMouseDown={() => !renameSaving && setRenameOpen(false)}>
           <div
             role="dialog"
@@ -884,7 +886,8 @@ export function Sidebar({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </aside>
   );

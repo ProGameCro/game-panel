@@ -25,8 +25,16 @@ html.gp-neon {
   --gp-neon-line: rgb(var(--neon-a) / 0.18);
 
   --background: var(--gp-neon-bg);
+  --gp-primary-200: rgb(var(--neon-a));
+  --gp-primary-300: rgb(var(--neon-a));
   --gp-primary-400: var(--gp-neon-cyan);
   --gp-primary-500: var(--gp-neon-violet);
+  --gp-primary-600: rgb(var(--neon-b));
+  --gp-primary-700: rgb(var(--neon-b));
+  /* the panel's accent colour (icons, links, active tabs) follows the theme */
+  --color-cyan-300: rgb(var(--neon-a));
+  --color-cyan-400: rgb(var(--neon-a));
+  --color-cyan-500: rgb(var(--neon-a));
   --gp-ods-accent-primary: var(--gp-neon-cyan);
   --gp-ods-accent-secondary: var(--gp-neon-magenta);
   scrollbar-color: rgb(var(--neon-b) / 0.6) transparent;
