@@ -321,6 +321,17 @@ class ApiClient {
     return response.data as { success: boolean };
   }
 
+  // custom panel name (null = the OVHcloud logo); reading needs no login
+  async getBranding() {
+    const response = await this.client.get('/api/branding');
+    return response.data as { name: string | null };
+  }
+
+  async setBranding(name: string) {
+    const response = await this.client.put('/api/branding', { name });
+    return response.data as { name: string | null };
+  }
+
   async installServer(payload: {
     provider: 'ovhcloud' | 'linuxgsm' | 'external';
     name: string;

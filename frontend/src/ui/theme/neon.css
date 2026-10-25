@@ -7,10 +7,16 @@
 
 html.gp-neon {
   --gp-neon-bg: #050714;
-  --gp-neon-cyan: #22d3ee;
-  --gp-neon-violet: #8b5cf6;
-  --gp-neon-magenta: #e879f9;
-  --gp-neon-edge: rgba(34, 211, 238, 0.24);
+  /* colour set as RGB triplets: a = main, b = second, c = accent, d = extra */
+  --neon-a: 34 211 238;
+  --neon-b: 139 92 246;
+  --neon-c: 232 121 249;
+  --neon-d: 16 185 129;
+  --gp-neon-cyan: rgb(var(--neon-a));
+  --gp-neon-violet: rgb(var(--neon-b));
+  --gp-neon-magenta: rgb(var(--neon-c));
+  --gp-neon-btn: linear-gradient(90deg, #06b6d4, #8b5cf6, #d946ef, #06b6d4);
+  --gp-neon-edge: rgb(var(--neon-a) / 0.24);
   --gp-neon-glass: rgba(11, 16, 38, 0.62);
 
   --background: var(--gp-neon-bg);
@@ -18,7 +24,7 @@ html.gp-neon {
   --gp-primary-500: var(--gp-neon-violet);
   --gp-ods-accent-primary: var(--gp-neon-cyan);
   --gp-ods-accent-secondary: var(--gp-neon-magenta);
-  scrollbar-color: rgba(139, 92, 246, 0.6) transparent;
+  scrollbar-color: rgb(var(--neon-b) / 0.6) transparent;
 }
 
 /* the page colour sits on <html>: a background on <body> would cover the animated layers below */
@@ -30,6 +36,17 @@ html.gp-neon body {
   background: transparent !important;
 }
 
+/* orange variant: same theme, warm colours (orange, red, amber) */
+html.gp-neon.gp-neon-orange {
+  --gp-neon-bg: #0c0604;
+  --neon-a: 251 146 60;
+  --neon-b: 239 68 68;
+  --neon-c: 250 204 21;
+  --neon-d: 244 63 94;
+  --gp-neon-glass: rgba(30, 14, 8, 0.62);
+  --gp-neon-btn: linear-gradient(90deg, #f97316, #ef4444, #f59e0b, #f97316);
+}
+
 /* ── animated background: aurora lights ── */
 html.gp-neon body::before {
   content: '';
@@ -38,10 +55,10 @@ html.gp-neon body::before {
   z-index: -2;
   pointer-events: none;
   background:
-    radial-gradient(32% 38% at 18% 28%, rgba(34, 211, 238, 0.4), transparent 70%),
-    radial-gradient(28% 34% at 82% 18%, rgba(232, 121, 249, 0.32), transparent 70%),
-    radial-gradient(38% 42% at 62% 82%, rgba(139, 92, 246, 0.38), transparent 70%),
-    radial-gradient(22% 26% at 35% 75%, rgba(16, 185, 129, 0.18), transparent 70%);
+    radial-gradient(32% 38% at 18% 28%, rgb(var(--neon-a) / 0.4), transparent 70%),
+    radial-gradient(28% 34% at 82% 18%, rgb(var(--neon-c) / 0.32), transparent 70%),
+    radial-gradient(38% 42% at 62% 82%, rgb(var(--neon-b) / 0.38), transparent 70%),
+    radial-gradient(22% 26% at 35% 75%, rgb(var(--neon-d) / 0.18), transparent 70%);
   filter: blur(40px);
   animation: gp-neon-aurora 28s ease-in-out infinite alternate;
   will-change: transform;
@@ -58,8 +75,8 @@ html.gp-neon body::after {
   z-index: -1;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(34, 211, 238, 0.16) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(139, 92, 246, 0.16) 1px, transparent 1px);
+    linear-gradient(rgb(var(--neon-a) / 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--neon-b) / 0.16) 1px, transparent 1px);
   background-size: 56px 56px;
   transform: perspective(420px) rotateX(62deg);
   transform-origin: bottom center;
@@ -80,17 +97,17 @@ html.gp-neon .gp-app-card[data-ods='card'] {
   -webkit-backdrop-filter: blur(12px) saturate(140%);
   backdrop-filter: blur(12px) saturate(140%);
   box-shadow:
-    0 0 0 1px rgba(139, 92, 246, 0.12) inset,
-    0 10px 36px -14px rgba(34, 211, 238, 0.35);
+    0 0 0 1px rgb(var(--neon-b) / 0.12) inset,
+    0 10px 36px -14px rgb(var(--neon-a) / 0.35);
   transition: box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
 html.gp-neon .bg-gp-surface-card:hover,
 html.gp-neon .gp-app-card[data-ods='card']:hover {
-  border-color: rgba(232, 121, 249, 0.35);
+  border-color: rgb(var(--neon-c) / 0.35);
   box-shadow:
-    0 0 0 1px rgba(232, 121, 249, 0.18) inset,
-    0 12px 40px -12px rgba(139, 92, 246, 0.45);
+    0 0 0 1px rgb(var(--neon-c) / 0.18) inset,
+    0 12px 40px -12px rgb(var(--neon-b) / 0.45);
 }
 
 html.gp-neon .bg-gp-surface-elevated {
@@ -105,40 +122,68 @@ html.gp-neon .bg-gp-surface-overlay {
   background-color: rgba(3, 5, 16, 0.82);
 }
 
+html.gp-neon.gp-neon-orange .bg-gp-surface-base {
+  background-color: rgba(12, 6, 4, 0.5);
+}
+
+html.gp-neon.gp-neon-orange .bg-gp-surface-elevated {
+  background-color: rgba(44, 20, 10, 0.72);
+}
+
+html.gp-neon.gp-neon-orange .bg-gp-surface-input {
+  background-color: rgba(22, 10, 5, 0.78);
+}
+
+html.gp-neon.gp-neon-orange .bg-gp-surface-overlay {
+  background-color: rgba(12, 5, 2, 0.82);
+}
+
 /* ── sidebar with a slowly moving neon edge ── */
 html.gp-neon aside.border-r {
-  background: linear-gradient(180deg, rgba(9, 13, 34, 0.88), rgba(18, 9, 42, 0.88));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--gp-neon-bg) 82%, rgb(var(--neon-a)) 6%), color-mix(in srgb, var(--gp-neon-bg) 80%, rgb(var(--neon-b)) 10%));
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   border-right-color: transparent;
-  box-shadow: 1px 0 0 0 rgba(34, 211, 238, 0.35), 8px 0 30px -18px rgba(139, 92, 246, 0.7);
+  box-shadow: 1px 0 0 0 rgb(var(--neon-a) / 0.35), 8px 0 30px -18px rgb(var(--neon-b) / 0.7);
   animation: gp-neon-edge 6s ease-in-out infinite alternate;
 }
 
 html.gp-neon aside img[alt='OVHcloud Game Panel'] {
-  filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.55));
+  filter: drop-shadow(0 0 8px rgb(var(--neon-a) / 0.55));
   animation: gp-neon-pulse 4s ease-in-out infinite;
 }
 
+html.gp-neon .gp-panel-name {
+  background-image: linear-gradient(90deg, rgb(var(--neon-a)), rgb(var(--neon-c)), rgb(var(--neon-b)), rgb(var(--neon-a)));
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* the panel's own rules force the text colour; the fill colour lets the gradient show */
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 10px rgb(var(--neon-a) / 0.45));
+  animation: gp-neon-flow 8s linear infinite;
+}
+
 html.gp-neon .gp-neon-toggle {
-  filter: drop-shadow(0 0 6px rgba(232, 121, 249, 0.8));
+  filter: drop-shadow(0 0 6px rgb(var(--neon-c) / 0.8));
   animation: gp-neon-pulse 2.5s ease-in-out infinite;
 }
 
 /* ── primary buttons: flowing neon gradient ── */
 html.gp-neon .gp-app-button--primary {
-  background-image: linear-gradient(90deg, #06b6d4, #8b5cf6, #d946ef, #06b6d4) !important;
+  background-image: var(--gp-neon-btn) !important;
   background-size: 300% 100% !important;
   background-color: transparent !important;
   border-color: transparent !important;
   color: #fff !important;
-  box-shadow: 0 0 16px -4px rgba(139, 92, 246, 0.75);
+  box-shadow: 0 0 16px -4px rgb(var(--neon-b) / 0.75);
   animation: gp-neon-flow 8s linear infinite;
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 html.gp-neon .gp-app-button--primary:hover:not(:disabled) {
-  box-shadow: 0 0 24px -2px rgba(232, 121, 249, 0.85);
+  box-shadow: 0 0 24px -2px rgb(var(--neon-c) / 0.85);
   transform: translateY(-1px);
 }
 
@@ -150,11 +195,11 @@ html.gp-neon .gp-app-button--primary:disabled {
 /* ── text ── */
 html.gp-neon h1,
 html.gp-neon h2 {
-  text-shadow: 0 0 18px rgba(34, 211, 238, 0.35);
+  text-shadow: 0 0 18px rgb(var(--neon-a) / 0.35);
 }
 
 html.gp-neon ::selection {
-  background: rgba(232, 121, 249, 0.35);
+  background: rgb(var(--neon-c) / 0.35);
 }
 
 /* ── keyframes ── */
@@ -194,10 +239,10 @@ html.gp-neon ::selection {
 
 @keyframes gp-neon-edge {
   from {
-    box-shadow: 1px 0 0 0 rgba(34, 211, 238, 0.35), 8px 0 30px -18px rgba(139, 92, 246, 0.7);
+    box-shadow: 1px 0 0 0 rgb(var(--neon-a) / 0.35), 8px 0 30px -18px rgb(var(--neon-b) / 0.7);
   }
   to {
-    box-shadow: 1px 0 0 0 rgba(232, 121, 249, 0.4), 8px 0 34px -16px rgba(34, 211, 238, 0.6);
+    box-shadow: 1px 0 0 0 rgb(var(--neon-c) / 0.4), 8px 0 34px -16px rgb(var(--neon-a) / 0.6);
   }
 }
 
@@ -207,6 +252,7 @@ html.gp-neon ::selection {
   html.gp-neon aside.border-r,
   html.gp-neon aside img,
   html.gp-neon .gp-neon-toggle,
+  html.gp-neon .gp-panel-name,
   html.gp-neon .gp-app-button--primary {
     animation: none !important;
   }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Login } from './components/Login';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { BrandingProvider } from './contexts/BrandingContext';
 import { type GameServer, type ServerPlayers } from './types/gameServer';
 import { apiClient } from './utils/api';
 import { METRICS_HISTORY_REQUEST_LIMIT } from './components/gameServersTable/utils';
@@ -757,7 +758,9 @@ function AppContent() {
 export function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <BrandingProvider>
+        <AppContent />
+      </BrandingProvider>
     </ThemeProvider>
   );
 }

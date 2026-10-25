@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Eye, EyeOff, Lock, User, AlertCircle } from 'lucide-react';
 import { apiClient } from '../utils/api';
+import { PanelLogo } from '../contexts/BrandingContext';
 
 interface LoginProps {
   onLogin: () => void;
@@ -62,11 +63,10 @@ export function Login({ onLogin }: LoginProps) {
     >
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center gap-3">
-          <img
-            src="/OVHcloud_Game_Panel_Logo.png"
-            alt="OVHcloud Game Panel"
-            className="h-14 w-auto object-contain"
-            style={{ filter: 'brightness(0) invert(1)' }}
+          <PanelLogo
+            imgClassName="h-14 w-auto object-contain"
+            imgStyle={{ filter: 'brightness(0) invert(1)' }}
+            textClassName="max-w-full text-4xl"
           />
           <p className="text-sm" style={{ color: 'rgba(255,255,255,0.65)' }}>
             Sign in to manage your game servers

@@ -1,19 +1,22 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 type Theme = 'light' | 'dark';
+// animated Neon theme on top of the dark theme, in two colour sets
+export type NeonColor = 'off' | 'cyan' | 'orange';
 
 interface ThemeContextValue {
-  // 'dark' also while the neon theme is on: neon is an animated layer on top of the dark theme
+  // 'dark' also while the neon theme is on
   theme: Theme;
   toggleTheme: () => void;
-  neon: boolean;
+  neon: NeonColor;
+  // off → cyan → orange → off
   toggleNeon: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
   theme: 'light',
   toggleTheme: () => {},
-  neon: false,
+  neon: 'off',
   toggleNeon: () => {},
 });
 
@@ -27,14 +30,18 @@ function getInitialTheme(): Theme {
   return 'light';
 }
 
-function getInitialNeon(): boolean {
-  return localStorage.getItem('theme-neon') === '1';
+function getInitialNeon(): NeonColor {
+  const stored = localStorage.getItem('theme-neon');
+  if (stored === 'orange') return 'orange';
+  return stored === '1' || stored === 'cyan' ? 'cyan' : 'off';
 }
+
+const NEXT_NEON: Record<NeonColor, NeonColor> = { off: 'cyan', cyan: 'orange', orange: 'off' };
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
-  const [neon, setNeon] = useState<boolean>(getInitialNeon);
-  const effectiveTheme: Theme = neon ? 'dark' : theme;
+  const [neon, setNeon] = useState<NeonColor>(getInitialNeon);
+  const effectiveTheme: Theme = neon !== 'off' ? 'dark' : theme;
 
   useEffect(() => {
     const root = document.documentElement;
@@ -43,21 +50,22 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } else {
       root.classList.remove('dark');
     }
-    root.classList.toggle('gp-neon', neon);
+    root.classList.toggle('gp-neon', neon !== 'off');
+    root.classList.toggle('gp-neon-orange', neon === 'orange');
     localStorage.setItem('theme', theme);
-    localStorage.setItem('theme-neon', neon ? '1' : '0');
+    localStorage.setItem('theme-neon', neon);
   }, [effectiveTheme, theme, neon]);
 
   const toggleTheme = () => {
     // leaving dark (also from neon) goes to the light theme
     if (effectiveTheme === 'dark') {
-      setNeon(false);
+      setNeon('off');
       setTheme('light');
     } else {
       setTheme('dark');
     }
   };
-  const toggleNeon = () => setNeon((prev) => !prev);
+  const toggleNeon = () => setNeon((prev) => NEXT_NEON[prev]);
 
   return (
     <ThemeContext.Provider value={{ theme: effectiveTheme, toggleTheme, neon, toggleNeon }}>

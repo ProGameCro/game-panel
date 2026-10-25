@@ -10,7 +10,8 @@ installed through LinuxGSM. Everything was built and tested on **Ubuntu 24.04**.
 - **New CoD4 servers** start from a copy of an existing server (no download), get a *Slots* field in the install form and
   skip the LinuxGSM update check at every start.
 - **phpMyAdmin** for the B3 database at `https://<panel domain>/pma/`.
-- **Neon theme**: an animated theme (aurora lights, moving grid, glass cards), switched on with the ✨ button in the sidebar.
+- **Neon theme**: an animated theme (aurora lights, moving grid, glass cards) in cyan or orange, switched with the ✨ button in the sidebar.
+- **Panel name**: admins can replace the *OVHcloud Game Panel* logo with their own name (user menu ⋮ → Panel name).
 
 ## Install (on the panel server, as root)
 
@@ -23,7 +24,7 @@ bash gp-cod4-template.sh     # new CoD4 servers: Slots, no update on start, loca
 bash gp-cod4-template.sh 5   # optional: use server 5's files as template for new CoD4 servers
 bash gp-pma.sh               # optional: phpMyAdmin at https://<panel domain>/pma/
 bash gp-db-root.sh           # only if the MariaDB root login does not work
-bash gp-neon-theme.sh        # optional: Neon theme
+bash gp-neon-theme.sh        # optional: Neon theme and panel name
 ```
 
 Then reload the panel (Ctrl+Shift+R) and open a CoD4 server > Settings > Game config.
@@ -43,7 +44,7 @@ Then reload the panel (Ctrl+Shift+R) and open a CoD4 server > Settings > Game co
 |---|---|
 | `install/` | the installer scripts (all files embedded, nothing else needed) |
 | `b3/` | B3 Docker image (Dockerfile, entrypoint), host service `gp-b3d.py`, `cod4x18.py`, B3 zip, database schema |
-| `tools/` | `make-gp-b3.sh` and `make-gp-cod4-template.sh` rebuild the installers from this repository's sources; `patches/` are the small edits the installers apply to the panel |
+| `tools/` | `make-gp-b3.sh`, `make-gp-cod4-template.sh` and `make-gp-neon-theme.py` rebuild the installers from this repository's sources; `patches/` are the small edits the installers apply to the panel |
 
 The panel changes themselves are the commits of this fork (frontend `components/serverSettings/Cod4ModSection.tsx`,
 `B3Section.tsx`, backend `providers/linuxgsm/adapters/cod4`).

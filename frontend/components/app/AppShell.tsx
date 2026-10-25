@@ -28,6 +28,7 @@ import type {
 } from '../../utils/serverRuntime';
 import { nextId } from '../../utils/uid';
 import type { ActiveLogPromptToast, ConsoleTerminalTarget } from './appRuntime';
+import { PanelLogo } from '../../contexts/BrandingContext';
 import { AppButton } from '../../src/ui/components';
 import { supportsConsoleCommand } from '../../utils/providerCapabilities';
 
@@ -212,11 +213,9 @@ export function AppShell({
           >
             <Menu className={`w-6 h-6 ${isDark ? 'text-white' : 'text-white'}`} />
           </AppButton>
-          <img
-            src="/OVHcloud_Game_Panel_Logo.png"
-            alt="OVHcloud Game Panel"
-            draggable={false}
-            className="h-8 w-auto max-w-[70%] object-contain brightness-0 invert select-none"
+          <PanelLogo
+            imgClassName="h-8 w-auto max-w-[70%] object-contain brightness-0 invert select-none"
+            textClassName="max-w-[70%] text-xl"
           />
           <div className="w-10"></div>
         </div>

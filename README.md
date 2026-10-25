@@ -29,7 +29,8 @@ Additions for CoD4 servers installed through LinuxGSM (Game Panel 1.6.0). Everyt
 | Server → **Settings → Game config → B3 (BigBrotherBot)** | Install / Start / Stop / Restart / Uninstall, console, `b3.xml` editor, logs. |
 | **Installing a new CoD4 server** | a **Slots** field; the game files are copied from one of your servers instead of downloaded; no GitHub update check at every start. |
 | `https://<panel domain>/pma/` | **phpMyAdmin** for the B3 database (MariaDB). |
-| Sidebar → **✨** next to the light/dark button | **Neon** theme: animated aurora lights and grid, glass cards, neon edges and buttons (stops for reduced motion). |
+| Sidebar → **✨** next to the light/dark button | **Neon** theme: animated aurora lights and grid, glass cards, neon edges and buttons (stops for reduced motion). Click again for the **orange** variant, once more to turn it off. |
+| User menu **⋮** → **Panel name** (admins) | Your own panel name instead of the *OVHcloud Game Panel* logo, for all users: sidebar, login page, mobile header, browser tab. *Use the logo* brings the logo back. |
 
 ### Install (on the panel server, as root)
 
@@ -43,7 +44,7 @@ bash gp-cod4-cmdline.sh      # 1. Command line card
 bash gp-b3.sh                # 2. B3 card + B3 + MariaDB database
 bash gp-cod4-template.sh     # 3. Slots and faster start for new CoD4 servers
 bash gp-pma.sh               # 4. (optional) phpMyAdmin
-bash gp-neon-theme.sh        # 5. (optional) Neon theme
+bash gp-neon-theme.sh        # 5. (optional) Neon theme (cyan / orange) and panel name
 ```
 
 Then reload the panel in the browser with **Ctrl+Shift+R**. All scripts can be run again, and **after every panel update** run 1–3 again.

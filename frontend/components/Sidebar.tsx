@@ -1,9 +1,17 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
-import { KeyRound, Moon, MoreVertical, Power, Sparkles, Sun, X } from 'lucide-react';
+import { KeyRound, Moon, MoreVertical, PenLine, Power, Sparkles, Sun, X } from 'lucide-react';
 import { Icon, type IconName } from '@ovhcloud/ods-react';
 import { getAppVersion } from '../utils/appInfo';
 import type { AuthUser } from '../utils/permissions';
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme, type NeonColor } from '../contexts/ThemeContext';
+import { PanelLogo, usePanelName } from '../contexts/BrandingContext';
+
+// what the ✨ button does next (off → cyan → orange → off)
+const NEON_TITLE: Record<NeonColor, string> = {
+  off: 'Neon theme (animated)',
+  cyan: 'Neon theme: orange colours',
+  orange: 'Turn off the neon theme',
+};
 import {
   AppButton,
   AppModal,
@@ -73,8 +81,9 @@ interface UserMenuRowProps {
   currentUserLabel: string;
   isDark: boolean;
   toggleTheme: () => void;
-  neon: boolean;
+  neon: NeonColor;
   toggleNeon: () => void;
+  onRenamePanel?: () => void;
   onChangePassword?: () => void;
   onLogout?: () => void;
 }
@@ -86,6 +95,7 @@ function UserMenuRow({
   toggleTheme,
   neon,
   toggleNeon,
+  onRenamePanel,
   onChangePassword,
   onLogout,
 }: UserMenuRowProps) {
@@ -126,10 +136,10 @@ function UserMenuRow({
       <button
         type="button"
         onClick={toggleNeon}
-        className={`gp-neon-toggle cursor-pointer shrink-0 rounded-md p-1 transition-colors ${neon ? 'text-fuchsia-300 hover:bg-white/10' : isDark ? 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
-        aria-label={neon ? 'Turn off the neon theme' : 'Turn on the neon theme (animated)'}
-        aria-pressed={neon}
-        title={neon ? 'Turn off the neon theme' : 'Neon theme (animated)'}
+        className={`gp-neon-toggle cursor-pointer shrink-0 rounded-md p-1 transition-colors ${neon === 'cyan' ? 'text-fuchsia-300 hover:bg-white/10' : neon === 'orange' ? 'text-orange-300 hover:bg-white/10' : isDark ? 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
+        aria-label={NEON_TITLE[neon]}
+        aria-pressed={neon !== 'off'}
+        title={NEON_TITLE[neon]}
       >
         <Sparkles className="h-3.5 w-3.5" />
       </button>
@@ -161,6 +171,16 @@ function UserMenuRow({
               <KeyRound className="h-4 w-4 text-[var(--color-cyan-400)]" />
               Change password
             </button>
+            {onRenamePanel && (
+              <button
+                type="button"
+                onClick={() => { setOpen(false); onRenamePanel(); }}
+                className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-sm font-medium transition-colors ${isDark ? 'text-[#eef4fa] hover:bg-[#1c2e47]' : 'text-gray-800 hover:bg-gray-100'}`}
+              >
+                <PenLine className="h-4 w-4 text-[var(--color-cyan-400)]" />
+                Panel name
+              </button>
+            )}
             <div className={`mx-2 border-t ${isDark ? 'border-white/10' : 'border-gray-200'}`} />
             <button
               type="button"
@@ -193,6 +213,28 @@ export function Sidebar({
   const [isPanelUpdateOpen, setIsPanelUpdateOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<PanelUpdateCheck | null>(null);
   const { theme, toggleTheme, neon, toggleNeon } = useTheme();
+  const { name: panelName, saveName } = usePanelName();
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameSaving, setRenameSaving] = useState(false);
+  const openRename = () => {
+    setRenameDraft(panelName ?? '');
+    setRenameError(null);
+    setRenameOpen(true);
+  };
+  const saveRename = async (value: string) => {
+    setRenameSaving(true);
+    setRenameError(null);
+    try {
+      await saveName(value);
+      setRenameOpen(false);
+    } catch (e) {
+      setRenameError((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Could not save the panel name.');
+    } finally {
+      setRenameSaving(false);
+    }
+  };
   const isDark = theme === 'dark';
   const layoutClasses = staticLayout ? 'relative h-full' : 'fixed left-0 top-0 h-screen';
   const widthClasses = staticLayout ? 'w-full' : 'w-52';
@@ -220,11 +262,9 @@ export function Sidebar({
     >
       <div className={`border-b px-4 py-3 ${isDark ? 'border-white/10' : 'border-white/40'}`}>
         <div className="flex items-center justify-center">
-          <img
-            src="/OVHcloud_Game_Panel_Logo.png"
-            alt="OVHcloud Game Panel"
-            draggable={false}
-            className="h-10 w-auto object-contain brightness-0 invert cursor-pointer select-none"
+          <PanelLogo
+            imgClassName="h-10 w-auto object-contain brightness-0 invert cursor-pointer select-none"
+            textClassName="w-full text-xl leading-10"
             onClick={() => {
               const next = logoClickCount + 1;
               if (next >= 5) {
@@ -283,6 +323,7 @@ export function Sidebar({
           toggleTheme={toggleTheme}
           neon={neon}
           toggleNeon={toggleNeon}
+          onRenamePanel={currentUser?.isRoot ? openRename : undefined}
           onChangePassword={onChangePassword}
           onLogout={onLogout}
         />
@@ -800,6 +841,51 @@ export function Sidebar({
           </AppModalBody>
         </AppModalContent>
       </AppModal>
+      {renameOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4" onMouseDown={() => !renameSaving && setRenameOpen(false)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gp-rename-title"
+            className="w-full max-w-sm rounded-xl border border-white/10 bg-[#0f1a2b] p-5 shadow-2xl"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h3 id="gp-rename-title" className="text-base font-semibold text-white">Panel name</h3>
+            <p className="mt-1 text-sm text-gray-400">Shown instead of the OVHcloud Game Panel logo, for every user. Leave it empty to show the logo again.</p>
+            <input
+              autoFocus
+              value={renameDraft}
+              maxLength={40}
+              placeholder="OVHcloud Game Panel"
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void saveRename(renameDraft);
+                if (e.key === 'Escape') setRenameOpen(false);
+              }}
+              className="mt-4 w-full rounded-lg border border-white/15 bg-[#0c1525] px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-cyan-400)]"
+            />
+            {renameError && <p className="mt-2 text-sm text-red-400">{renameError}</p>}
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              {panelName && (
+                <button type="button" disabled={renameSaving} onClick={() => void saveRename('')} className="mr-auto rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/10">
+                  Use the logo
+                </button>
+              )}
+              <button type="button" disabled={renameSaving} onClick={() => setRenameOpen(false)} className="rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/10">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={renameSaving}
+                onClick={() => void saveRename(renameDraft)}
+                className="gp-app-button--primary rounded-lg bg-[#0050d7] px-4 py-2 text-sm font-semibold text-white hover:bg-[#157eea] disabled:opacity-60"
+              >
+                {renameSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

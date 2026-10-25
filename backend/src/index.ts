@@ -15,6 +15,7 @@ import serverRoutes from './routes/servers.js';
 import systemRoutes from './routes/system.js';
 import catalogRoutes from './routes/catalog.js';
 import downloadRoutes from './routes/download.js';
+import brandingRoutes from './routes/branding.js';
 import { setupWebSocket } from './websocket/handler.js';
 import { getAppVersion } from './utils/appInfo.js';
 import { logError, logInfo } from './utils/logger.js';
@@ -86,6 +87,8 @@ app.use(express.urlencoded({ extended: true, limit: API_BODY_LIMIT }));
 app.use('/api/auth', authRoutes);
 // /api/download/:token
 app.use('/api/download', downloadRoutes);
+// /api/branding (custom panel name; reading needs no login)
+app.use('/api/branding', brandingRoutes);
 // /api/users
 app.use('/api/users', authMiddleware, userRoutes);
 // /api/servers/:id/members
