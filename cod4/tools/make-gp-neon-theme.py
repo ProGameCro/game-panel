@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Builds gp-neon-theme.sh: Neon theme (cyan / orange) + custom panel name, all files embedded.
-A file is replaced only when it is in a known state (Game Panel 1.6.0, the previous Neon version, or already this one)."""
+A file is replaced only when it is in a known state (Game Panel 1.6.0, an earlier Neon version, or already this one)."""
 import base64, hashlib, os, subprocess, sys
 
 ROOT = os.environ.get('ROOT', os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 OUT = os.environ.get('OUT', os.path.join(ROOT, 'cod4', 'install', 'gp-neon-theme.sh'))
 PRISTINE = os.environ.get('PRISTINE', 'ef90e58')   # Game Panel 1.6.0
-PREVIOUS = os.environ.get('PREVIOUS', 'f0f785f')   # first Neon version
+PREVIOUS = os.environ.get('PREVIOUS', 'f0f785f abc41db').split()   # earlier Neon versions
 FILES = {
     'frontend': ['main.tsx', 'App.tsx', 'components/Sidebar.tsx', 'components/Login.tsx', 'components/app/AppShell.tsx',
                  'utils/api.ts', 'contexts/ThemeContext.tsx', 'contexts/BrandingContext.tsx', 'src/ui/theme/neon.css'],
@@ -23,7 +23,7 @@ for part, files in FILES.items():
     for f in files:
         rel = '%s/%s' % (part, f)
         final = open(os.path.join(ROOT, rel), 'rb').read()
-        priors = sorted({sha(b) for b in (git_show(PRISTINE, rel), git_show(PREVIOUS, rel)) if b is not None and b != final})
+        priors = sorted({sha(b) for b in [git_show(r, rel) for r in [PRISTINE] + PREVIOUS] if b is not None and b != final})
         new = git_show(PRISTINE, rel) is None
         entries.append((part, rel, base64.b64encode(final).decode(), priors, new))
 

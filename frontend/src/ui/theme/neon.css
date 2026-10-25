@@ -17,7 +17,12 @@ html.gp-neon {
   --gp-neon-magenta: rgb(var(--neon-c));
   --gp-neon-btn: linear-gradient(90deg, #06b6d4, #8b5cf6, #d946ef, #06b6d4);
   --gp-neon-edge: rgb(var(--neon-a) / 0.24);
-  --gp-neon-glass: rgba(11, 16, 38, 0.62);
+  --gp-neon-glass: rgba(11, 16, 38, 0.8);
+  /* surfaces of dialogs and the server settings window, darkest to lightest */
+  --gp-neon-s1: #0b1024;
+  --gp-neon-s2: #0f1530;
+  --gp-neon-s3: #18203f;
+  --gp-neon-line: rgb(var(--neon-a) / 0.18);
 
   --background: var(--gp-neon-bg);
   --gp-primary-400: var(--gp-neon-cyan);
@@ -43,7 +48,10 @@ html.gp-neon.gp-neon-orange {
   --neon-b: 239 68 68;
   --neon-c: 250 204 21;
   --neon-d: 244 63 94;
-  --gp-neon-glass: rgba(30, 14, 8, 0.62);
+  --gp-neon-glass: rgba(30, 14, 8, 0.8);
+  --gp-neon-s1: #140904;
+  --gp-neon-s2: #1c0e07;
+  --gp-neon-s3: #2a160b;
   --gp-neon-btn: linear-gradient(90deg, #f97316, #ef4444, #f59e0b, #f97316);
 }
 
@@ -94,8 +102,6 @@ html.gp-neon .bg-gp-surface-card,
 html.gp-neon .gp-app-card[data-ods='card'] {
   background-color: var(--gp-neon-glass);
   border-color: var(--gp-neon-edge);
-  -webkit-backdrop-filter: blur(12px) saturate(140%);
-  backdrop-filter: blur(12px) saturate(140%);
   box-shadow:
     0 0 0 1px rgb(var(--neon-b) / 0.12) inset,
     0 10px 36px -14px rgb(var(--neon-a) / 0.35);
@@ -138,11 +144,52 @@ html.gp-neon.gp-neon-orange .bg-gp-surface-overlay {
   background-color: rgba(12, 5, 2, 0.82);
 }
 
+/*
+ * Dialogs and the server settings window use fixed colours (Tailwind bg-[#...]); give them the theme's colours.
+ * No backdrop-filter on cards or the sidebar: it would trap these fixed-position windows inside the card and cut them off.
+ */
+html.gp-neon .bg-\[\#0f172a\],
+html.gp-neon .bg-\[\#0d1524\],
+html.gp-neon .bg-\[\#0f1a2b\],
+html.gp-neon .bg-\[\#101a2d\] {
+  background-color: var(--gp-neon-s1);
+}
+
+html.gp-neon .bg-\[\#111827\],
+html.gp-neon .bg-\[\#1a2332\] {
+  background-color: var(--gp-neon-s2);
+}
+
+html.gp-neon .bg-\[\#1e293b\],
+html.gp-neon .bg-\[\#1f2937\],
+html.gp-neon .bg-\[\#1c2e47\] {
+  background-color: var(--gp-neon-s3);
+}
+
+html.gp-neon .bg-\[\#0f1723\]\/60 {
+  background-color: color-mix(in srgb, var(--gp-neon-s1) 60%, transparent);
+}
+
+html.gp-neon .bg-\[\#0f1723\]\/40 {
+  background-color: color-mix(in srgb, var(--gp-neon-s1) 40%, transparent);
+}
+
+html.gp-neon .gp-settings-modal .border-gray-700,
+html.gp-neon .gp-settings-modal .border-gray-600 {
+  border-color: var(--gp-neon-line);
+}
+
+html.gp-neon .gp-settings-modal .hover\:bg-gray-700:hover {
+  background-color: rgb(var(--neon-a) / 0.12);
+}
+
+html.gp-neon .gp-settings-modal > div {
+  box-shadow: 0 0 0 1px rgb(var(--neon-a) / 0.25), 0 20px 60px -20px rgb(var(--neon-b) / 0.6);
+}
+
 /* ── sidebar with a slowly moving neon edge ── */
 html.gp-neon aside.border-r {
   background: linear-gradient(180deg, color-mix(in srgb, var(--gp-neon-bg) 82%, rgb(var(--neon-a)) 6%), color-mix(in srgb, var(--gp-neon-bg) 80%, rgb(var(--neon-b)) 10%));
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
   border-right-color: transparent;
   box-shadow: 1px 0 0 0 rgb(var(--neon-a) / 0.35), 8px 0 30px -18px rgb(var(--neon-b) / 0.7);
   animation: gp-neon-edge 6s ease-in-out infinite alternate;
