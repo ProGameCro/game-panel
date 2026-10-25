@@ -5,13 +5,16 @@ import { AppButton, AppInput, AppSelect } from '../../src/ui/components';
 import { RestartToApplyNote } from './RestartToApplyNote';
 
 // Call of Duty 4 (LinuxGSM cod4server) command line, edited like on CoD4X hosting panels:
-// +set sv_authtoken, r_xassetnum (materials / xanims / xmodels), +set fs_game and +set rcon_password.
+// +set sv_authtoken, r_xassetnum (materials / xanims / xmodels), +set fs_game and rcon_password.
 // - startparameters is written to the instance config (<gameservername>.cfg), which LinuxGSM
 //   reads last of the normal configs, so it overrides _default.cfg and survives LinuxGSM updates;
 // - the RCON password is written straight into the command line (never server.cfg); LinuxGSM runs that line through a
 //   shell, so the password is limited to characters the shell leaves alone;
 // - the auth token is kept in secrets-common.cfg (LinuxGSM's file for secrets); the command line references ${authtoken};
-// - fs_game, sv_authtoken and r_xassetnum go before the first +map/+exec; rcon_password goes last so it wins over server.cfg.
+// - fs_game, sv_authtoken and r_xassetnum go before the first +map/+exec.
+// - CoD4X applies every "+set" before running the other startup commands, so server.cfg (+exec) would override a
+//   "+set rcon_password". The password is set with "+rcon_password X" at the end instead: plain commands run in order,
+//   after +exec, so this one wins over a rcon_password in server.cfg.
 
 export interface Cod4ModSectionProps {
   serverId: number;
@@ -38,6 +41,8 @@ const ASSET_LIMIT = 65535;
 const NO_MOD = '__none__';
 
 const SET_VALUE = (dvar: string) => new RegExp(`\\s*\\+set\\s+${dvar}\\s+(?:"[^"]*"|\\S+)`, 'gi');
+// rcon_password as "+set rcon_password X" (older lines) or "+rcon_password X"
+const RCON_VALUE = /\s*\+(?:set\s+)?rcon_password\s+(?:"([^"]*)"|(\S+))/gi;
 const CUSTOM_REFERENCE = '${customparameters}';
 const EARLY_AT = /\+(?:exec|map|map_rotate|devmap)\b/;
 
@@ -70,15 +75,16 @@ export const parseCommandLine = (parameters: string): Cod4CommandLine => {
     auth: /\+set\s+sv_authtoken\s/i.test(parameters),
     assets: { material: asset('material'), xanim: asset('xanim'), xmodel: asset('xmodel') },
     custom: parameters.includes(CUSTOM_REFERENCE),
-    rcon: /\+set\s+rcon_password\s+(?:"([^"]*)"|(\S+))/i.exec(parameters)?.slice(1).find((v) => v !== undefined) ?? '',
+    rcon: new RegExp(RCON_VALUE.source, 'i').exec(parameters)?.slice(1).find((v) => v !== undefined) ?? '',
   };
 };
 
 /** The command line without anything the panel manages. */
 export const baseCommandLine = (parameters: string): string =>
   tidy(
-    ['fs_game', 'sv_authtoken', 'r_xassetnum', 'rcon_password']
+    ['fs_game', 'sv_authtoken', 'r_xassetnum']
       .reduce((text, dvar) => text.replace(SET_VALUE(dvar), ''), parameters)
+      .replace(RCON_VALUE, '')
       .split(CUSTOM_REFERENCE)
       .join('')
   );
@@ -95,7 +101,7 @@ export const buildCommandLine = (parameters: string, wanted: Cod4CommandLine): s
     .join(' ');
   const at = base.search(EARLY_AT);
   const withEarly = !early ? base : at >= 0 ? `${base.slice(0, at)}${early} ${base.slice(at)}` : `${base} ${early}`;
-  return tidy([withEarly, wanted.custom && CUSTOM_REFERENCE, wanted.rcon && `+set rcon_password ${wanted.rcon}`].filter(Boolean).join(' '));
+  return tidy([withEarly, wanted.custom && CUSTOM_REFERENCE, wanted.rcon && `+rcon_password ${wanted.rcon}`].filter(Boolean).join(' '));
 };
 
 // kept for the earlier mod-only callers and tests
@@ -274,9 +280,12 @@ export function Cod4ModSection({
   };
   const invalid = Object.values(problems).some(Boolean);
   const current = { mod, auth, ...assets, rcon };
-  const changed = (Object.keys(current) as (keyof typeof current)[]).some((k) => current[k] !== initial[k]);
   const wanted: Cod4CommandLine = { mod, auth: auth !== '', assets, custom: keepCustom, rcon };
   const preview = parameters === null ? '' : buildCommandLine(parameters, wanted);
+  // also when the saved line only needs rewriting (e.g. an old "+set rcon_password" moved to "+rcon_password")
+  const changed =
+    (Object.keys(current) as (keyof typeof current)[]).some((k) => current[k] !== initial[k]) ||
+    (parameters !== null && preview !== parameters);
 
   const options = useMemo(
     () => [{ value: NO_MOD, label: 'No mod (stock game)' }, ...mods.map((m) => ({ value: m, label: `mods/${m}` }))],
@@ -410,7 +419,7 @@ export function Cod4ModSection({
         </div>
 
         <div className={row}>
-          <span className={label}>+set rcon_password</span>
+          <span className={label}>rcon_password</span>
           <div className="flex gap-2">
             <div className="flex-1">
               <SecretInput
@@ -438,7 +447,7 @@ export function Cod4ModSection({
               </AppButton>
             )}
           </div>
-          <span className={hint}>Set after server.cfg, so it counts even if server.cfg has its own rcon_password.</span>
+          <span className={hint}>Set after server.cfg (+rcon_password at the end of the command line), so it counts even if server.cfg has its own rcon_password.</span>
           {problems.rcon && <span className={bad}>6–64 characters: letters, numbers and @ % _ + = . , : - only.</span>}
         </div>
 
