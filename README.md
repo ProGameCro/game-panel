@@ -2,6 +2,9 @@
 
 # 🎮 OVHcloud Game Panel
 
+> **This fork** adds Call of Duty 4 (CoD4X) tools: a Command line card, a B3 (BigBrotherBot) card, local templates and slots for new CoD4 servers. See [cod4/README.md](cod4/README.md).
+
+
 ### Deploy and manage your game servers in minutes — from one clean, modern web interface.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
