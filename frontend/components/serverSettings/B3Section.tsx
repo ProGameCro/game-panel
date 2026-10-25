@@ -62,7 +62,7 @@ const CONFIG_FILE = /\.(ini|xml)$/i;
 // parsers and helper modules of the built-in B3 (B3 1.12 plus cod4x); anything else in a parsers folder is the user's own
 const STOCK_PARSERS = new Set(
   (
-    '__init__ altitude arma2 arma3 bf3 bf4 bfbc2 bfh chiv cod cod2 cod4 cod4gr cod4x cod5 cod6 cod7 cod8 csgo et etpro insurgency ' +
+    '__init__ altitude arma2 arma3 bf3 bf4 bfbc2 bfh chiv cod cod2 cod4 cod4gr cod4x cod4x18 cod5 cod6 cod7 cod8 csgo et etpro insurgency ' +
     'iourt41 iourt42 iourt43 moh mohw oa081 punkbuster q3 ro2 smg smg11 sof2 sof2pm wop wop15'
   ).split(' ')
 );
@@ -98,7 +98,8 @@ const defaultConfig = (v: { database: string; rcon: string; port: string; gameLo
     @conf : the folder containing this config file
  -->
     <settings name="b3">
-        <set name="parser">cod4x</set>
+        <!-- cod4x18: CoD4X without the b3hide plugin (players from "status"); cod4x needs b3hide (b3status) -->
+        <set name="parser">cod4x18</set>
         <!-- Your database info: [protocol]://[db-user]:[db-password]@[db-server[:port]]/[db-name] -->
         <set name="database">${xmlEscape(v.database)}</set>
         <set name="bot_name">CWP-Bot</set>
@@ -663,7 +664,7 @@ export function B3Section({
               <span className={val}>
                 {parsers.length
                   ? `${parsers.join(', ')} (use the name in "parser:")`
-                  : 'none extra (your B3 has cod4x, cod4, cod4gr …)'}
+                  : 'none extra (your B3 has cod4x18, cod4x, cod4 …)'}
               </span>
             </div>
             <div className={row}>
