@@ -52,6 +52,8 @@ type B3Status = {
   heartbeat: number;
   lastAction: { id: string; action: string; result: 'ok' | 'error'; message: string | null } | null;
   database: { url: string; host: string; port: number; name: string; user: string } | null;
+  // the host's own (public) address, reported by the service
+  serverIp?: string | null;
 };
 
 const B3_DIR = 'b3';
@@ -67,6 +69,14 @@ const STOCK_PARSERS = new Set(
 const DATABASE_PLACEHOLDER = 'mysql://b3:password@127.0.0.1/b3';
 
 /** Sets B3 settings in a b3.ini (key: value lines) or b3.xml (<set name="key">value</set>) config. */
+/** Reads a B3 setting from a b3.ini or b3.xml config ('' when it is not set). */
+export const getConfigValue = (text: string, xml: boolean, key: string): string => {
+  const m = xml
+    ? new RegExp(`<set\\s+name=["']${key}["']\\s*>([^<]*)</set>`, 'i').exec(text)
+    : new RegExp(`^\\s*${key}\\s*[:=]\\s*(.*)$`, 'im').exec(text);
+  return m ? m[1].trim() : '';
+};
+
 export const setConfigValues = (text: string, xml: boolean, values: Record<string, string>): string =>
   Object.entries(values).reduce((out, [key, value]) => {
     if (xml) {
@@ -80,7 +90,7 @@ export const setConfigValues = (text: string, xml: boolean, values: Record<strin
 const xmlEscape = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /** Ready-to-use b3.xml for this server (the user's CWP-Bot config with the server's values filled in). */
-const defaultConfig = (v: { database: string; rcon: string; port: string; gameLog: string }) => `<configuration>
+const defaultConfig = (v: { database: string; rcon: string; port: string; gameLog: string; ip: string }) => `<configuration>
 <!--
  B3 main config, made by the panel (Install B3). For any change made in this config file, restart the bot.
  Whenever you can specify a file/directory path, the following shortcuts can be used:
@@ -105,9 +115,9 @@ const defaultConfig = (v: { database: string; rcon: string; port: string; gameLo
         <set name="port">${xmlEscape(v.port || '28960')}</set>
         <!-- B3 sees this server's folder as /data -->
         <set name="game_log">${xmlEscape(v.gameLog)}</set>
-        <!-- B3 runs on the same machine as the game server -->
-        <set name="public_ip">127.0.0.1</set>
-        <set name="rcon_ip">127.0.0.1</set>
+        <!-- The public IP of the game server, and the IP the bot sends RCON commands to -->
+        <set name="public_ip">${xmlEscape(v.ip)}</set>
+        <set name="rcon_ip">${xmlEscape(v.ip)}</set>
         <set name="punkbuster">off</set>
         <set name="delay">0.33</set>
         <set name="lines_per_second">50</set>
@@ -200,6 +210,9 @@ export function B3Section({
   const [confirmUninstall, setConfirmUninstall] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [hasB3Log, setHasB3Log] = useState(false);
+  // rcon_ip and port as written in the selected config
+  const [configRcon, setConfigRcon] = useState({ ip: '', port: '' });
+  const [configTick, setConfigTick] = useState(0);
   // inline editor for the selected B3 config; null = closed
   const [draft, setDraft] = useState<string | null>(null);
   const [draftSaved, setDraftSaved] = useState('');
@@ -315,6 +328,7 @@ export function B3Section({
         gameLog: `/data/serverfiles/${line.mod ? `mods/${line.mod}` : 'main'}/games_mp.log`,
       });
       await refresh();
+      setConfigTick((t) => t + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not read the B3 folder.');
     } finally {
@@ -331,6 +345,22 @@ export function B3Section({
     const timer = window.setInterval(() => void refresh(), POLL_MS);
     return () => window.clearInterval(timer);
   }, [installed, refresh]);
+
+  useEffect(() => {
+    if (!config) {
+      setConfigRcon({ ip: '', port: '' });
+      return undefined;
+    }
+    let cancelled = false;
+    void readOptional(serverId, `${B3_DIR}/${config}`).then((text) => {
+      if (cancelled) return;
+      const xml = /\.xml$/i.test(config);
+      setConfigRcon(text ? { ip: getConfigValue(text, xml, 'rcon_ip'), port: getConfigValue(text, xml, 'port') } : { ip: '', port: '' });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [serverId, config, configTick]);
 
   useEffect(() => {
     // keep the newest console lines in view
@@ -385,7 +415,7 @@ export function B3Section({
             : `${B3_DIR}/conf`;
       if (confDir === `${B3_DIR}/conf`) await apiClient.createServerDirectory(serverId, B3_DIR, 'conf').catch(() => undefined);
       if (!(await readOptional(serverId, `${confDir}/b3.xml`)) && !(await readOptional(serverId, `${confDir}/b3.ini`))) {
-        await writeServerFile(serverId, `${confDir}/b3.xml`, defaultConfig({ ...server, database: current.database?.url || DATABASE_PLACEHOLDER }));
+        await writeServerFile(serverId, `${confDir}/b3.xml`, defaultConfig({ ...server, database: current.database?.url || DATABASE_PLACEHOLDER, ip: current.serverIp || '127.0.0.1' }));
       }
       await load();
     } catch (e) {
@@ -450,12 +480,12 @@ export function B3Section({
       const values: Record<string, string> = {
         rcon_password: server.rcon,
         port: server.port || '28960',
-        rcon_ip: '127.0.0.1',
         game_log: server.gameLog,
         ...(status?.database ? { database: status.database.url } : {}),
       };
       const next = setConfigValues(text, /\.xml$/i.test(config), values);
       if (next !== text) await writeServerFile(serverId, path, next);
+      setConfigTick((t) => t + 1);
       setNotice(next !== text ? `Saved to b3/${config}.${running ? ' Restart B3 to use them.' : ''}` : `b3/${config} already has these values.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update the config.');
@@ -489,6 +519,7 @@ export function B3Section({
       }
       await writeServerFile(serverId, `${B3_DIR}/${config}`, draft);
       setDraftSaved(draft);
+      setConfigTick((t) => t + 1);
       setNotice(`Saved b3/${config}.${running && !restart ? ' Restart B3 to use the changes.' : ''}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save the config.');
@@ -641,7 +672,10 @@ export function B3Section({
             </div>
             <div className={row}>
               <span className={key}>rcon_ip / port</span>
-              <span className={val}>127.0.0.1 / {server.port || 'server port'}</span>
+              <span className={val}>
+                {configRcon.ip || status?.serverIp || '127.0.0.1'} / {configRcon.port || server.port || 'server port'}
+                {!configRcon.ip && config && <span className={`ml-2 text-xs ${textSecondary}`}>(suggested; not set in b3/{config})</span>}
+              </span>
             </div>
             <div className={row}>
               <span className={key}>rcon_password</span>
