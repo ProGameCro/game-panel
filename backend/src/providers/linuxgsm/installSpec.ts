@@ -15,6 +15,13 @@ function normalizeLinuxGsmEnv(payload: unknown): string[] {
     return env;
 }
 
+// Call of Duty 4: no LinuxGSM update (a GitHub check) on every container start, so the server comes online quickly.
+// UPDATE_ON_START can still be set in the server's environment variables.
+function withCod4Defaults(shortname: string, env: string[]): string[] {
+    if (shortname !== 'cod4' || env.some((entry) => entry.startsWith('UPDATE_ON_START='))) return env;
+    return [...env, 'UPDATE_ON_START=false'];
+}
+
 export async function resolveLinuxGsmInstallSpec(
     ctx: ProviderInstallContext
 ): Promise<ResolvedInstallSpec> {
@@ -35,7 +42,7 @@ export async function resolveLinuxGsmInstallSpec(
         healthcheck: ctx.healthcheck,
         resourceLimits: ctx.resourceLimits,
         mounts,
-        env: normalizeLinuxGsmEnv(ctx.body.env),
+        env: withCod4Defaults(game.shortname, normalizeLinuxGsmEnv(ctx.body.env)),
         runtimeIdentity,
         runtimeConfig: runtimeConfigForIdentity(runtimeIdentity, '/data', '/app'),
         providerMetadata: {
