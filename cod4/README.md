@@ -1,7 +1,7 @@
 # Call of Duty 4 (CoD4X) + B3 for the OVHcloud Game Panel
 
 Additions for the [OVHcloud Game Panel](https://github.com/ovh/game-panel) (version 1.6.0) for Call of Duty 4 servers
-installed through LinuxGSM:
+installed through LinuxGSM. Everything was built and tested on **Ubuntu 24.04**.
 
 - **Command line card** (Settings > Game config): slots, `sv_authtoken`, Materials / Xanims / Xmodels (`r_xassetnum`),
   `fs_game` (mod), `rcon_password`. Nothing is written to `server.cfg`; the RCON password is set after `server.cfg`, so it wins.

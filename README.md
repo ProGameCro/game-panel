@@ -19,7 +19,7 @@
 
 ## 🔫 Call of Duty 4 (CoD4X) + B3: how to use
 
-Additions for CoD4 servers installed through LinuxGSM (Game Panel 1.6.0).
+Additions for CoD4 servers installed through LinuxGSM (Game Panel 1.6.0). Everything was built and tested on **Ubuntu 24.04**.
 
 ### What you get
 
