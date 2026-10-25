@@ -891,7 +891,17 @@ export function ServerSettingsModal({
             serverId={serverId}
             canReadFileManager={canUseFileManager}
             canWriteFileManager={canWriteFiles}
-            onOpenFileManagerPath={(path) => { hasUserSelectedTabRef.current = true; handleOpenFileManagerAtPath(path); }}
+            onOpenFileManagerPath={(path) => {
+              hasUserSelectedTabRef.current = true;
+              // a path ending with "/" is a folder: show it in the file manager instead of opening it as a file
+              if (path.endsWith('/')) {
+                setSelectedFile(null);
+                setCurrentPath(`/${path.replace(/^\/+|\/+$/g, '')}`);
+                setActiveTab('filemanager');
+                return;
+              }
+              handleOpenFileManagerAtPath(path);
+            }}
             ovhcloudConfigFiles={ovhcloudConfigFiles}
             minecraftProps={(isMinecraftJavaOvhcloud || isMinecraftBedrockOvhcloud) && serverId && canUseMinecraft ? {
               serverId,

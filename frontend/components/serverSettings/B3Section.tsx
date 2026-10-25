@@ -5,7 +5,9 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  FileText,
   FolderOpen,
+  Pencil,
   Play,
   RefreshCw,
   RotateCw,
@@ -197,6 +199,10 @@ export function B3Section({
   const [appWithoutB3, setAppWithoutB3] = useState(false);
   const [confirmUninstall, setConfirmUninstall] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [hasB3Log, setHasB3Log] = useState(false);
+  // inline editor for the selected B3 config; null = closed
+  const [draft, setDraft] = useState<string | null>(null);
+  const [draftSaved, setDraftSaved] = useState('');
   const [dropDatabase, setDropDatabase] = useState(false);
   const [status, setStatus] = useState<B3Status | null>(null);
   const [pending, setPending] = useState<string | null>(null);
@@ -271,6 +277,7 @@ export function B3Section({
           ? main
           : all.filter((f) => !/^plugin_/i.test(name(f)) && !/example|distribution/i.test(name(f)));
         setAppRoot(appRoot);
+        setHasB3Log(root.entries.some((e) => e.type === 'file' && e.name === 'b3.log'));
         setAppWithoutB3(Boolean(app && appRoot === null && app.entries.length > 0));
         setConfigs(files);
         setConfig((current) =>
@@ -457,6 +464,41 @@ export function B3Section({
     }
   };
 
+  const openEditor = async () => {
+    setError(null);
+    setNotice(null);
+    const text = await readOptional(serverId, `${B3_DIR}/${config}`);
+    if (text === null) {
+      setError(`Could not read b3/${config}.`);
+      return;
+    }
+    setDraft(text);
+    setDraftSaved(text);
+  };
+
+  const saveEditor = async (restart: boolean) => {
+    if (draft === null) return;
+    setBusy('edit');
+    setError(null);
+    setNotice(null);
+    try {
+      if (/\.xml$/i.test(config)) {
+        const parsed = new DOMParser().parseFromString(draft, 'application/xml');
+        const problem = parsed.getElementsByTagName('parsererror')[0];
+        if (problem) throw new Error(`b3/${config} is not valid XML: ${(problem.textContent ?? '').trim().split('\n')[0]}`);
+      }
+      await writeServerFile(serverId, `${B3_DIR}/${config}`, draft);
+      setDraftSaved(draft);
+      setNotice(`Saved b3/${config}.${running && !restart ? ' Restart B3 to use the changes.' : ''}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the config.');
+      return;
+    } finally {
+      setBusy(null);
+    }
+    if (restart) await send('restart');
+  };
+
   const uninstall = async () => {
     setBusy('uninstall');
     setError(null);
@@ -508,7 +550,7 @@ export function B3Section({
         </div>
         <div className="flex flex-wrap gap-2">
           {installed && onOpenFileManagerPath && (
-            <AppButton tone="ghost" onClick={() => onOpenFileManagerPath(B3_DIR)}>
+            <AppButton tone="ghost" onClick={() => onOpenFileManagerPath(`${B3_DIR}/`)}>
               <FolderOpen className="h-4 w-4" /> Open B3 folder
             </AppButton>
           )}
@@ -558,7 +600,10 @@ export function B3Section({
                   <AppSelect
                     options={configs.map((c) => ({ value: c, label: `b3/${c}` }))}
                     value={config}
-                    onChange={setConfig}
+                    onChange={(value) => {
+                      setConfig(value);
+                      setDraft(null);
+                    }}
                     disabled={!canWriteFileManager}
                   />
                 </div>
@@ -636,7 +681,39 @@ export function B3Section({
                 <AppButton tone="neutral" className="!h-auto !px-4 !py-1.5" onClick={() => void writeValues()} disabled={busy !== null}>
                   {busy === 'values' ? 'Saving…' : `Write these values into b3/${config}`}
                 </AppButton>
+                {draft === null && (
+                  <AppButton tone="neutral" className="!h-auto !px-4 !py-1.5" onClick={() => void openEditor()} disabled={busy !== null}>
+                    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                      <Pencil className="h-4 w-4" /> Edit b3/{config}
+                    </span>
+                  </AppButton>
+                )}
                 {notice && <span className="text-sm text-emerald-300">{notice}</span>}
+              </div>
+            )}
+            {draft !== null && (
+              <div className="grid gap-2">
+                <span className={`text-sm font-semibold ${textPrimary}`}>b3/{config}</span>
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  spellCheck={false}
+                  rows={24}
+                  className={`w-full resize-y rounded-lg border ${borderColor} bg-black/30 p-2 font-mono text-xs leading-5 text-gray-100`}
+                />
+                <div className="flex flex-wrap justify-end gap-2">
+                  <AppButton tone="neutral" className="!h-auto !px-4 !py-1.5" onClick={() => setDraft(null)} disabled={busy !== null}>
+                    {draft !== draftSaved ? 'Cancel' : 'Close'}
+                  </AppButton>
+                  <AppButton tone="primary" className="!h-auto !px-4 !py-1.5" onClick={() => void saveEditor(false)} disabled={busy !== null || draft === draftSaved}>
+                    {busy === 'edit' ? 'Saving…' : 'Save'}
+                  </AppButton>
+                  {running && (
+                    <AppButton tone="primary" className="!h-auto !px-4 !py-1.5" onClick={() => void saveEditor(true)} disabled={busy !== null || draft === draftSaved}>
+                      Save and restart B3
+                    </AppButton>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -661,9 +738,16 @@ export function B3Section({
             <div className="mb-1 flex items-center justify-between">
               <span className={`text-sm font-semibold ${textPrimary}`}>Console</span>
               {onOpenFileManagerPath && (
-                <AppButton tone="ghost" onClick={() => onOpenFileManagerPath(`${B3_DIR}/logs`)}>
-                  <FolderOpen className="h-4 w-4" /> Logs
-                </AppButton>
+                <div className="flex flex-wrap gap-1">
+                  <AppButton tone="ghost" onClick={() => onOpenFileManagerPath(`${B3_DIR}/logs/console.log`)}>
+                    <FileText className="h-4 w-4" /> console.log
+                  </AppButton>
+                  {hasB3Log && (
+                    <AppButton tone="ghost" onClick={() => onOpenFileManagerPath(`${B3_DIR}/b3.log`)}>
+                      <FileText className="h-4 w-4" /> b3.log
+                    </AppButton>
+                  )}
+                </div>
               )}
             </div>
             <pre

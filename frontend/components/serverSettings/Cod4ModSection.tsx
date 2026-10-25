@@ -329,7 +329,7 @@ export function Cod4ModSection({
         </div>
         <div className="flex gap-2">
           {onOpenFileManagerPath && (
-            <AppButton tone="ghost" onClick={() => onOpenFileManagerPath(modsPath)}>
+            <AppButton tone="ghost" onClick={() => onOpenFileManagerPath(`${modsPath}/`)}>
               <FolderOpen className="h-4 w-4" /> Open mods folder
             </AppButton>
           )}
