@@ -1,0 +1,213 @@
+/*
+ * Neon: an animated theme on top of the dark theme (html.dark.gp-neon, toggled from the sidebar).
+ * Moving aurora lights and a scrolling grid behind see-through "glass" cards, with neon edges and buttons.
+ * Plain (unlayered) CSS so it wins over the theme layers and the Tailwind utilities it restyles.
+ * Everything that moves stops for people who ask their system for reduced motion.
+ */
+
+html.gp-neon {
+  --gp-neon-bg: #050714;
+  --gp-neon-cyan: #22d3ee;
+  --gp-neon-violet: #8b5cf6;
+  --gp-neon-magenta: #e879f9;
+  --gp-neon-edge: rgba(34, 211, 238, 0.24);
+  --gp-neon-glass: rgba(11, 16, 38, 0.62);
+
+  --background: var(--gp-neon-bg);
+  --gp-primary-400: var(--gp-neon-cyan);
+  --gp-primary-500: var(--gp-neon-violet);
+  --gp-ods-accent-primary: var(--gp-neon-cyan);
+  --gp-ods-accent-secondary: var(--gp-neon-magenta);
+  scrollbar-color: rgba(139, 92, 246, 0.6) transparent;
+}
+
+/* the page colour sits on <html>: a background on <body> would cover the animated layers below */
+html.gp-neon {
+  background: var(--gp-neon-bg);
+}
+
+html.gp-neon body {
+  background: transparent !important;
+}
+
+/* ── animated background: aurora lights ── */
+html.gp-neon body::before {
+  content: '';
+  position: fixed;
+  inset: -25%;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(32% 38% at 18% 28%, rgba(34, 211, 238, 0.4), transparent 70%),
+    radial-gradient(28% 34% at 82% 18%, rgba(232, 121, 249, 0.32), transparent 70%),
+    radial-gradient(38% 42% at 62% 82%, rgba(139, 92, 246, 0.38), transparent 70%),
+    radial-gradient(22% 26% at 35% 75%, rgba(16, 185, 129, 0.18), transparent 70%);
+  filter: blur(40px);
+  animation: gp-neon-aurora 28s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+/* ── animated background: perspective grid scrolling towards the viewer ── */
+html.gp-neon body::after {
+  content: '';
+  position: fixed;
+  left: -50%;
+  right: -50%;
+  bottom: 0;
+  height: 48vh;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139, 92, 246, 0.16) 1px, transparent 1px);
+  background-size: 56px 56px;
+  transform: perspective(420px) rotateX(62deg);
+  transform-origin: bottom center;
+  -webkit-mask-image: linear-gradient(to top, #000 10%, transparent 85%);
+  mask-image: linear-gradient(to top, #000 10%, transparent 85%);
+  animation: gp-neon-grid 5s linear infinite;
+}
+
+/* ── glass surfaces ── */
+html.gp-neon .bg-gp-surface-base {
+  background-color: rgba(5, 8, 22, 0.5);
+}
+
+html.gp-neon .bg-gp-surface-card,
+html.gp-neon .gp-app-card[data-ods='card'] {
+  background-color: var(--gp-neon-glass);
+  border-color: var(--gp-neon-edge);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+  box-shadow:
+    0 0 0 1px rgba(139, 92, 246, 0.12) inset,
+    0 10px 36px -14px rgba(34, 211, 238, 0.35);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+html.gp-neon .bg-gp-surface-card:hover,
+html.gp-neon .gp-app-card[data-ods='card']:hover {
+  border-color: rgba(232, 121, 249, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(232, 121, 249, 0.18) inset,
+    0 12px 40px -12px rgba(139, 92, 246, 0.45);
+}
+
+html.gp-neon .bg-gp-surface-elevated {
+  background-color: rgba(20, 27, 58, 0.72);
+}
+
+html.gp-neon .bg-gp-surface-input {
+  background-color: rgba(7, 11, 28, 0.78);
+}
+
+html.gp-neon .bg-gp-surface-overlay {
+  background-color: rgba(3, 5, 16, 0.82);
+}
+
+/* ── sidebar with a slowly moving neon edge ── */
+html.gp-neon aside.border-r {
+  background: linear-gradient(180deg, rgba(9, 13, 34, 0.88), rgba(18, 9, 42, 0.88));
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-right-color: transparent;
+  box-shadow: 1px 0 0 0 rgba(34, 211, 238, 0.35), 8px 0 30px -18px rgba(139, 92, 246, 0.7);
+  animation: gp-neon-edge 6s ease-in-out infinite alternate;
+}
+
+html.gp-neon aside img[alt='OVHcloud Game Panel'] {
+  filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.55));
+  animation: gp-neon-pulse 4s ease-in-out infinite;
+}
+
+html.gp-neon .gp-neon-toggle {
+  filter: drop-shadow(0 0 6px rgba(232, 121, 249, 0.8));
+  animation: gp-neon-pulse 2.5s ease-in-out infinite;
+}
+
+/* ── primary buttons: flowing neon gradient ── */
+html.gp-neon .gp-app-button--primary {
+  background-image: linear-gradient(90deg, #06b6d4, #8b5cf6, #d946ef, #06b6d4) !important;
+  background-size: 300% 100% !important;
+  background-color: transparent !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  box-shadow: 0 0 16px -4px rgba(139, 92, 246, 0.75);
+  animation: gp-neon-flow 8s linear infinite;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+html.gp-neon .gp-app-button--primary:hover:not(:disabled) {
+  box-shadow: 0 0 24px -2px rgba(232, 121, 249, 0.85);
+  transform: translateY(-1px);
+}
+
+html.gp-neon .gp-app-button--primary:disabled {
+  animation: none;
+  opacity: 0.55;
+}
+
+/* ── text ── */
+html.gp-neon h1,
+html.gp-neon h2 {
+  text-shadow: 0 0 18px rgba(34, 211, 238, 0.35);
+}
+
+html.gp-neon ::selection {
+  background: rgba(232, 121, 249, 0.35);
+}
+
+/* ── keyframes ── */
+@keyframes gp-neon-aurora {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate3d(4%, -3%, 0) rotate(8deg) scale(1.08);
+  }
+  100% {
+    transform: translate3d(-4%, 3%, 0) rotate(-6deg) scale(1.02);
+  }
+}
+
+@keyframes gp-neon-grid {
+  to {
+    background-position: 0 56px, 0 0;
+  }
+}
+
+@keyframes gp-neon-flow {
+  to {
+    background-position: 300% 0;
+  }
+}
+
+@keyframes gp-neon-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+@keyframes gp-neon-edge {
+  from {
+    box-shadow: 1px 0 0 0 rgba(34, 211, 238, 0.35), 8px 0 30px -18px rgba(139, 92, 246, 0.7);
+  }
+  to {
+    box-shadow: 1px 0 0 0 rgba(232, 121, 249, 0.4), 8px 0 34px -16px rgba(34, 211, 238, 0.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.gp-neon body::before,
+  html.gp-neon body::after,
+  html.gp-neon aside.border-r,
+  html.gp-neon aside img,
+  html.gp-neon .gp-neon-toggle,
+  html.gp-neon .gp-app-button--primary {
+    animation: none !important;
+  }
+}

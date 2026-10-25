@@ -9,6 +9,7 @@ import '@ovhcloud/ods-themes/default/fonts';
 import './src/ui/theme/ods-dark.css';
 import './src/ui/theme/ods-light.css';
 import './styles/globals.css';
+import './src/ui/theme/neon.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

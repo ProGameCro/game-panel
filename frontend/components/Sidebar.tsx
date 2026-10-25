@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
-import { KeyRound, Moon, MoreVertical, Power, Sun, X } from 'lucide-react';
+import { KeyRound, Moon, MoreVertical, Power, Sparkles, Sun, X } from 'lucide-react';
 import { Icon, type IconName } from '@ovhcloud/ods-react';
 import { getAppVersion } from '../utils/appInfo';
 import type { AuthUser } from '../utils/permissions';
@@ -73,6 +73,8 @@ interface UserMenuRowProps {
   currentUserLabel: string;
   isDark: boolean;
   toggleTheme: () => void;
+  neon: boolean;
+  toggleNeon: () => void;
   onChangePassword?: () => void;
   onLogout?: () => void;
 }
@@ -82,6 +84,8 @@ function UserMenuRow({
   currentUserLabel,
   isDark,
   toggleTheme,
+  neon,
+  toggleNeon,
   onChangePassword,
   onLogout,
 }: UserMenuRowProps) {
@@ -118,6 +122,16 @@ function UserMenuRow({
         title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       >
         {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+      </button>
+      <button
+        type="button"
+        onClick={toggleNeon}
+        className={`gp-neon-toggle cursor-pointer shrink-0 rounded-md p-1 transition-colors ${neon ? 'text-fuchsia-300 hover:bg-white/10' : isDark ? 'text-gray-400 hover:bg-gray-700 hover:text-gray-200' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
+        aria-label={neon ? 'Turn off the neon theme' : 'Turn on the neon theme (animated)'}
+        aria-pressed={neon}
+        title={neon ? 'Turn off the neon theme' : 'Neon theme (animated)'}
+      >
+        <Sparkles className="h-3.5 w-3.5" />
       </button>
       <div
         ref={ref}
@@ -178,7 +192,7 @@ export function Sidebar({
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [isPanelUpdateOpen, setIsPanelUpdateOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<PanelUpdateCheck | null>(null);
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, neon, toggleNeon } = useTheme();
   const isDark = theme === 'dark';
   const layoutClasses = staticLayout ? 'relative h-full' : 'fixed left-0 top-0 h-screen';
   const widthClasses = staticLayout ? 'w-full' : 'w-52';
@@ -267,6 +281,8 @@ export function Sidebar({
           currentUserLabel={currentUserLabel}
           isDark={isDark}
           toggleTheme={toggleTheme}
+          neon={neon}
+          toggleNeon={toggleNeon}
           onChangePassword={onChangePassword}
           onLogout={onLogout}
         />

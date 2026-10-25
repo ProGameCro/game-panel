@@ -10,6 +10,7 @@ installed through LinuxGSM. Everything was built and tested on **Ubuntu 24.04**.
 - **New CoD4 servers** start from a copy of an existing server (no download), get a *Slots* field in the install form and
   skip the LinuxGSM update check at every start.
 - **phpMyAdmin** for the B3 database at `https://<panel domain>/pma/`.
+- **Neon theme**: an animated theme (aurora lights, moving grid, glass cards), switched on with the ✨ button in the sidebar.
 
 ## Install (on the panel server, as root)
 
@@ -22,6 +23,7 @@ bash gp-cod4-template.sh     # new CoD4 servers: Slots, no update on start, loca
 bash gp-cod4-template.sh 5   # optional: use server 5's files as template for new CoD4 servers
 bash gp-pma.sh               # optional: phpMyAdmin at https://<panel domain>/pma/
 bash gp-db-root.sh           # only if the MariaDB root login does not work
+bash gp-neon-theme.sh        # optional: Neon theme
 ```
 
 Then reload the panel (Ctrl+Shift+R) and open a CoD4 server > Settings > Game config.

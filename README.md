@@ -29,12 +29,13 @@ Additions for CoD4 servers installed through LinuxGSM (Game Panel 1.6.0). Everyt
 | Server → **Settings → Game config → B3 (BigBrotherBot)** | Install / Start / Stop / Restart / Uninstall, console, `b3.xml` editor, logs. |
 | **Installing a new CoD4 server** | a **Slots** field; the game files are copied from one of your servers instead of downloaded; no GitHub update check at every start. |
 | `https://<panel domain>/pma/` | **phpMyAdmin** for the B3 database (MariaDB). |
+| Sidebar → **✨** next to the light/dark button | **Neon** theme: animated aurora lights and grid, glass cards, neon edges and buttons (stops for reduced motion). |
 
 ### Install (on the panel server, as root)
 
 ```bash
 cd ~
-for f in gp-cod4-cmdline.sh gp-b3.sh gp-cod4-template.sh gp-pma.sh gp-db-root.sh; do
+for f in gp-cod4-cmdline.sh gp-b3.sh gp-cod4-template.sh gp-pma.sh gp-db-root.sh gp-neon-theme.sh; do
   curl -fsSLO https://raw.githubusercontent.com/ProGameCro/game-panel/main/cod4/install/$f
 done
 
@@ -42,6 +43,7 @@ bash gp-cod4-cmdline.sh      # 1. Command line card
 bash gp-b3.sh                # 2. B3 card + B3 + MariaDB database
 bash gp-cod4-template.sh     # 3. Slots and faster start for new CoD4 servers
 bash gp-pma.sh               # 4. (optional) phpMyAdmin
+bash gp-neon-theme.sh        # 5. (optional) Neon theme
 ```
 
 Then reload the panel in the browser with **Ctrl+Shift+R**. All scripts can be run again, and **after every panel update** run 1–3 again.
