@@ -10,8 +10,10 @@ PRISTINE = os.environ.get('PRISTINE', 'ef90e58')   # Game Panel 1.6.0
 FILES = {
     'backend': ['src/providers/linuxgsm/adapters/cod4/index.ts', 'src/providers/linuxgsm/adapters/registry.ts',
                 'src/providers/linuxgsm/adapters/types.ts', 'src/providers/linuxgsm/installSpec.ts',
-                'src/services/servers.ts', 'src/routes/cod4.ts', 'src/providers/installTypes.ts'],
-    'frontend': ['components/InstallGameServer.tsx', 'components/serverSettings/Cod4ModSection.tsx'],
+                'src/services/servers.ts', 'src/routes/cod4.ts', 'src/providers/installTypes.ts',
+                'src/routes/users.ts', 'src/database/repositories/userRepository.ts'],
+    'frontend': ['components/InstallGameServer.tsx', 'components/serverSettings/Cod4ModSection.tsx',
+                 'components/UserAdministration.tsx', 'components/userAdministration/UsersPanel.tsx'],
 }
 
 def git(*args):

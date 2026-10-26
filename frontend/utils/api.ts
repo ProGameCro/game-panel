@@ -273,6 +273,12 @@ class ApiClient {
     return response.data as { success: boolean };
   }
 
+  // make a user a Super Admin (full access) or take it back; only Super Admins may do this
+  async setSuperAdmin(userId: number, enabled: boolean) {
+    const response = await this.client.post(`/api/users/${userId}/super-admin`, { enabled });
+    return response.data as { success: boolean };
+  }
+
   async resetUserPassword(userId: number, newPassword: string) {
     const response = await this.client.post(`/api/users/${userId}/reset-password`, { newPassword });
     return response.data as { success: boolean };

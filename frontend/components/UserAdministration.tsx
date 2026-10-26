@@ -80,6 +80,8 @@ export function UserAdministration({
 
   const [addMemberUserId, setAddMemberUserId] = useState('');
   const [addMemberKnown, setAddMemberKnown] = useState<string[]>([]);
+  const [superAdminConfirm, setSuperAdminConfirm] = useState<PanelUser | null>(null);
+  const [superAdminLoading, setSuperAdminLoading] = useState(false);
   const [deleteUserConfirm, setDeleteUserConfirm] = useState<
     | { open: false }
     | {
@@ -330,6 +332,29 @@ export function UserAdministration({
     });
   };
 
+  // only Super Admins can make others Super Admins (the backend checks it too)
+  const canManageSuperAdmins = Boolean(users.find((u) => u.id === currentUserId)?.isRoot);
+
+  const confirmSuperAdminChange = async () => {
+    if (!superAdminConfirm) return;
+    const user = superAdminConfirm;
+    const enabled = !user.isRoot;
+    setSuperAdminLoading(true);
+    setFeedback(null);
+    try {
+      await apiClient.setSuperAdmin(user.id, enabled);
+      await loadUsers();
+      setFeedback({
+        type: 'success',
+        text: enabled ? `${user.username} is now a Super Admin.` : `${user.username} is no longer a Super Admin.`,
+      });
+    } catch (error: any) {
+      throw new Error(apiError(error, 'Failed to change Super Admin access.'));
+    } finally {
+      setSuperAdminLoading(false);
+    }
+  };
+
   const confirmDeleteUser = async () => {
     if (!deleteUserConfirm.open) return;
     const userId = deleteUserConfirm.userId;
@@ -517,6 +542,23 @@ export function UserAdministration({
             requiredText={deleteUserConfirm.open ? deleteUserConfirm.username : undefined}
           />
 
+          <ConfirmationModal
+            isOpen={superAdminConfirm !== null}
+            onClose={() => {
+              if (superAdminLoading) return;
+              setSuperAdminConfirm(null);
+            }}
+            onConfirm={confirmSuperAdminChange}
+            title={superAdminConfirm?.isRoot ? 'Remove Super Admin' : 'Make Super Admin'}
+            message={
+              superAdminConfirm?.isRoot
+                ? `${superAdminConfirm.username} will keep only the permissions given by name (Edit). Continue?`
+                : `${superAdminConfirm?.username ?? ''} gets full access to everything: all servers, all users, panel settings and updates, like you. Continue?`
+            }
+            confirmText={superAdminConfirm?.isRoot ? 'Remove' : 'Make Super Admin'}
+            confirmButtonClass="bg-amber-600 hover:bg-amber-700"
+          />
+
           <UsersPanel
             users={users}
             usersLoading={usersLoading}
@@ -528,6 +570,12 @@ export function UserAdministration({
             openUserEdit={openUserEdit}
             requestDeleteUser={requestDeleteUser}
             deleteUserLoading={deleteUserLoading}
+            currentUserId={currentUserId}
+            canManageSuperAdmins={canManageSuperAdmins}
+            requestSuperAdminChange={(user) => {
+              setFeedback(null);
+              setSuperAdminConfirm(user);
+            }}
           />
         </>
       )}

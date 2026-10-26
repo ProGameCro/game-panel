@@ -1,4 +1,5 @@
-"""Registers the CoD4 files status: /api/cod4 in the backend, apiClient.getCod4FilesStatus() in the frontend.
+"""Registers the CoD4 files status: /api/cod4 in the backend, apiClient.getCod4FilesStatus() in the frontend,
+and apiClient.setSuperAdmin() for the Super Admin button in User Administration.
 Small insertions (these files are also changed by other installers). Safe to run again. Usage: patch_cod4_linux.py <app>"""
 import os, sys
 
@@ -31,5 +32,12 @@ if insert('frontend/utils/api.ts', 'getCod4FilesStatus', '  async getCurrentUser
     changed.add('frontend')
 if insert('frontend/utils/api.ts', 'export type Cod4FilesStatus', 'export const apiClient',
           "export type Cod4FilesStatus = { ready: boolean; folder: string; problems: string[] };\n\n", after=False):
+    changed.add('frontend')
+if insert('frontend/utils/api.ts', 'setSuperAdmin', '  async resetUserPassword(userId: number, newPassword: string) {\n',
+          "  // make a user a Super Admin (full access) or take it back; only Super Admins may do this\n"
+          "  async setSuperAdmin(userId: number, enabled: boolean) {\n"
+          "    const response = await this.client.post(`/api/users/${userId}/super-admin`, { enabled });\n"
+          "    return response.data as { success: boolean };\n"
+          "  }\n\n", after=False):
     changed.add('frontend')
 print(' '.join(sorted(changed)))

@@ -80,6 +80,7 @@ export class UserRepository extends BaseRepository {
       username?: string;
       globalPermissions?: string[];
       is_enabled?: boolean;
+      is_root?: boolean;
     }
   ): Promise<void> {
     const db = await this.ensureDb();
@@ -100,6 +101,11 @@ export class UserRepository extends BaseRepository {
     if (data.is_enabled !== undefined) {
       fields.push('is_enabled = ?');
       values.push(data.is_enabled ? 1 : 0);
+    }
+
+    if (data.is_root !== undefined) {
+      fields.push('is_root = ?');
+      values.push(data.is_root ? 1 : 0);
     }
 
     if (fields.length === 0) return;

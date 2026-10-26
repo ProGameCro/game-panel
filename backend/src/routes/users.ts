@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { requireGlobalPermission } from '../middleware/auth.js';
+import { requireGlobalPermission, type AuthenticatedRequest } from '../middleware/auth.js';
 import { userRepository } from '../database/index.js';
 import { hashPassword } from '../utils/auth.js';
 import { sendRouteError } from '../utils/routeErrors.js';
@@ -133,6 +133,53 @@ router.patch(
     }
 );
 
+// A Super Admin (root) can be changed only by another Super Admin, never by themselves here
+function canManageRootUser(req: Request, targetId: number): boolean {
+    const requester = (req as AuthenticatedRequest).user;
+    return Boolean(requester?.isRoot) && requester?.userId !== targetId;
+}
+
+// POST /api/users/:id/super-admin  { enabled: boolean }
+// Super Admins can make other users Super Admins (full access, like the first admin) or take it back.
+router.post(
+    '/:id/super-admin',
+    requireGlobalPermission(PERMISSIONS.users.manage),
+    async (req: Request, res: Response) => {
+        try {
+            const id = requirePositiveInt(req.params.id, 'Invalid user id');
+            const body = requireBodyObject(req.body);
+            if (typeof body.enabled !== 'boolean') {
+                return res.status(400).json({ error: 'enabled must be a boolean' });
+            }
+            if (!(req as AuthenticatedRequest).user?.isRoot) {
+                return res.status(403).json({ error: 'Only a Super Admin can change Super Admins' });
+            }
+            if ((req as AuthenticatedRequest).user?.userId === id) {
+                return res.status(400).json({ error: 'You cannot change your own Super Admin access' });
+            }
+
+            const user = await userRepository.findById(id);
+            if (!user) return res.status(404).json({ error: 'User not found' });
+
+            if (body.enabled) {
+                await userRepository.updateUser(id, { is_root: true, is_enabled: true });
+            } else {
+                // the wildcard belongs to Super Admins only: a former one keeps just the permissions listed by name
+                const permissions = parsePermsJson(user.global_permissions_json).filter((p) => p !== '*');
+                await userRepository.updateUser(id, { is_root: false, globalPermissions: permissions });
+            }
+
+            return res.json({ success: true });
+        } catch (error) {
+            return sendRouteError(res, error, {
+                route: 'ROUTE:USERS:SUPER_ADMIN',
+                fallbackMessage: 'Failed to change Super Admin access',
+                logContext: { userId: req.params.id },
+            });
+        }
+    }
+);
+
 // DELETE /api/users/:id
 router.delete(
     '/:id',
@@ -144,7 +191,7 @@ router.delete(
             const user = await userRepository.findById(id);
             if (!user) return res.status(404).json({ error: 'User not found' });
 
-            if (user.is_root) {
+            if (user.is_root && !canManageRootUser(req, id)) {
                 return res.status(403).json({ error: 'Root user cannot be deleted' });
             }
 
@@ -178,7 +225,7 @@ router.post(
             const user = await userRepository.findById(id);
             if (!user) return res.status(404).json({ error: 'User not found' });
 
-            if (user.is_root) {
+            if (user.is_root && !canManageRootUser(req, id)) {
                 return res.status(403).json({ error: 'Root user password should be changed via /auth route' });
             }
 

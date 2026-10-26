@@ -1,4 +1,4 @@
-import { Plus, Settings2, Shield, Users } from 'lucide-react';
+import { Plus, Settings2, Shield, ShieldOff, Users } from 'lucide-react';
 import { Icon } from '@ovhcloud/ods-react';
 import { AppButton, AppCard } from '../../src/ui/components';
 
@@ -21,6 +21,10 @@ interface UsersPanelProps {
   openUserEdit: (user: PanelUserListItem) => void;
   requestDeleteUser: (user: PanelUserListItem) => void;
   deleteUserLoading: boolean;
+  // Super Admins can make other users Super Admins (or take it back) and delete them
+  currentUserId?: number | null;
+  canManageSuperAdmins?: boolean;
+  requestSuperAdminChange?: (user: PanelUserListItem) => void;
 }
 
 export function UsersPanel({
@@ -34,6 +38,9 @@ export function UsersPanel({
   openUserEdit,
   requestDeleteUser,
   deleteUserLoading,
+  currentUserId = null,
+  canManageSuperAdmins = false,
+  requestSuperAdminChange,
 }: UsersPanelProps) {
   return (
     <AppCard className="p-5 md:p-6">
@@ -101,8 +108,42 @@ export function UsersPanel({
                   </p>
                 </div>
               </div>
+              {u.isRoot && canManageSuperAdmins && u.id !== currentUserId && (
+                <div className="flex items-center gap-3">
+                  <AppButton
+                    type="button"
+                    onClick={() => requestSuperAdminChange?.(u)}
+                    title="Take Super Admin away: the user keeps only the permissions given by name"
+                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-amber-500/50 bg-[#111827] px-3.5 text-sm text-amber-200 hover:border-amber-400 hover:text-amber-100"
+                  >
+                    <ShieldOff className="h-4 w-4" />
+                    Remove Super Admin
+                  </AppButton>
+                  <AppButton
+                    type="button"
+                    onClick={() => requestDeleteUser(u)}
+                    disabled={deleteUserLoading}
+                    aria-label={`Delete user ${u.username}`}
+                    title={`Delete user ${u.username}`}
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-red-500/45 bg-[#2a1219] text-sm text-red-200 hover:border-red-400 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Icon name="trash" />
+                  </AppButton>
+                </div>
+              )}
               {!u.isRoot && (
                 <div className="flex items-center gap-3">
+                  {canManageSuperAdmins && (
+                    <AppButton
+                      type="button"
+                      onClick={() => requestSuperAdminChange?.(u)}
+                      title="Full access to everything, like the first admin"
+                      className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-amber-500/50 bg-[#111827] px-3.5 text-sm text-amber-200 hover:border-amber-400 hover:text-amber-100"
+                    >
+                      <Shield className="h-4 w-4" />
+                      Make Super Admin
+                    </AppButton>
+                  )}
                   <AppButton
                     type="button"
                     onClick={() => openUserEdit(u)}
