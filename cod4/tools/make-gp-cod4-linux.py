@@ -11,7 +11,7 @@ FILES = {
     'backend': ['src/providers/linuxgsm/adapters/cod4/index.ts', 'src/providers/linuxgsm/adapters/registry.ts',
                 'src/providers/linuxgsm/adapters/types.ts', 'src/providers/linuxgsm/installSpec.ts',
                 'src/services/servers.ts', 'src/routes/cod4.ts'],
-    'frontend': ['components/InstallGameServer.tsx'],
+    'frontend': ['components/InstallGameServer.tsx', 'components/serverSettings/Cod4ModSection.tsx'],
 }
 
 def git(*args):
