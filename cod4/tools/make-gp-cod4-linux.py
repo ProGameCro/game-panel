@@ -24,7 +24,7 @@ FILES = {
                  'components/admin/AdminB3.tsx', 'components/admin/AdminActivity.tsx', 'components/admin/AdminServerCfg.tsx',
                  'components/admin/AdminBackups.tsx', 'components/admin/AdminCod4Files.tsx', 'utils/adminApi.ts',
                  'components/gameServersTable/GameIcon.tsx', 'components/gameServersTable/GameServerCard.tsx',
-                 'components/gameServersTable/GameServersDesktopTable.tsx',
+                 'components/gameServersTable/GameServersDesktopTable.tsx', 'index.html', 'public/favicon.svg',
                  # theme and panel name (formerly gp-neon-theme.sh)
                  'main.tsx', 'App.tsx', 'components/Sidebar.tsx', 'components/Login.tsx', 'components/app/AppShell.tsx',
                  'contexts/ThemeContext.tsx', 'contexts/BrandingContext.tsx', 'src/ui/theme/neon.css'],
