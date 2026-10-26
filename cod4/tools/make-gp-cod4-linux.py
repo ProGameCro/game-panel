@@ -63,6 +63,7 @@ replace_py = b64('\n'.join(py).encode() + b'\n')
 patch_py = b64(read('cod4/tools/patches/patch_cod4_linux.py'))
 dockerfile = b64(read('cod4/linuxgsm/Dockerfile'))
 gamedig = b64(read('cod4/linuxgsm/check_gamedig.sh'))
+sponsor = b64(read('cod4/linuxgsm/command_sponsor.sh'))
 
 # same rule as the panel (adapters/cod4/index.ts): big files are hard links, small files and executables copies
 # --from: turns the given links into download URLs ("github <api url>" or "url <url>"), GitHub release pages included
@@ -237,6 +238,7 @@ fi
 ctx="$(mktemp -d)"
 echo '__DOCKERFILE__' | base64 -d > "$ctx/Dockerfile"
 echo '__GAMEDIG__' | base64 -d > "$ctx/check_gamedig.sh"
+echo '__SPONSOR__' | base64 -d > "$ctx/command_sponsor.sh"
 cp "$KIT/_default.cfg" "$ctx/_default.cfg"
 build="$( { docker image inspect -f '{{.Id}}' "$BASE_IMAGE"; cat "$ctx"/*; } | sha256sum | cut -c1-16)"
 if [[ "$(docker image inspect -f '{{index .Config.Labels "org.gamepanel.cod4.build"}}' "$IMAGE" 2>/dev/null || true)" != "$build" ]]; then
@@ -292,7 +294,7 @@ else
 fi
 echo "Postojeći serveri rade kao i prije. Nakon nadogradnje Game Panela ponovno pokreni: sudo bash $0"
 '''
-for key, value in {'__LINK_PY__': link_py, '__RESOLVE_PY__': resolve_py, '__DOCKERFILE__': dockerfile, '__GAMEDIG__': gamedig,
+for key, value in {'__LINK_PY__': link_py, '__RESOLVE_PY__': resolve_py, '__DOCKERFILE__': dockerfile, '__GAMEDIG__': gamedig, '__SPONSOR__': sponsor,
                    '__REPLACE_PY__': replace_py, '__PATCH_PY__': patch_py}.items():
     script = script.replace(key, value)
 open(OUT, 'w').write(script)
