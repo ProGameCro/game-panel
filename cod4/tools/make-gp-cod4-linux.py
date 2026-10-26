@@ -30,7 +30,8 @@ FILES = {
                  'components/admin/AdminBackups.tsx', 'components/admin/AdminCod4Files.tsx', 'components/admin/AdminFtp.tsx',
                  'components/serverSettings/FtpSection.tsx', 'components/serverSettings/B3Section.tsx', 'components/OwnerPicker.tsx',
                  'components/serverSettings/Cod4ReinstallSection.tsx', 'components/serverSettings/ServerSettingsModalLayout.tsx',
-                 'components/gameServersTable/useServerOwners.ts', 'utils/adminApi.ts',
+                 'components/gameServersTable/useServerOwners.ts', 'components/gameServersTable/GameServersGrid.tsx',
+                 'components/gameServersTable/GameServersMobileList.tsx', 'utils/adminApi.ts',
                  'components/gameServersTable/GameIcon.tsx', 'components/gameServersTable/GameServerCard.tsx',
                  'components/gameServersTable/GameServersDesktopTable.tsx', 'index.html', 'public/favicon.svg',
                  # theme and panel name (formerly gp-neon-theme.sh)

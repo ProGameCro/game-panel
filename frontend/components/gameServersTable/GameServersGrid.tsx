@@ -21,7 +21,7 @@ export function GameServersGrid({
       {filteredAndSortedServers.length === 0 && (
         <div className="rounded-lg border border-dashed border-gray-700 p-6 text-center">
           <p className="text-sm text-gray-400">No game servers yet.</p>
-          <p className="mt-1 text-xs text-gray-500">Use “Add Game Server” to install your first one.</p>
+          <p className="mt-1 text-xs text-gray-500">{canInstall ? 'Use “Add Game Server” to install your first one.' : 'Your servers show up here once they are given to you.'}</p>
         </div>
       )}
 
@@ -33,6 +33,7 @@ export function GameServersGrid({
           <GameServerCard key={server.id} server={server} variant="grid" {...cardActions} />
         ))}
 
+        {canInstall && (
         <button
           type="button"
           onClick={() => {
@@ -52,6 +53,7 @@ export function GameServersGrid({
           </span>
           <span>Add Game Server</span>
         </button>
+        )}
       </div>
     </div>
   );

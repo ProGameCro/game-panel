@@ -86,7 +86,7 @@ async function isEmptyDir(dir: string): Promise<boolean> {
     return entries === null || entries.length === 0;
 }
 
-type LinkCount = { linked: number; copied: number };
+export type LinkCount = { linked: number; copied: number };
 
 async function copyFile(source: string, target: string): Promise<void> {
     // FICLONE makes a copy-on-write clone where the filesystem supports it and a normal copy elsewhere
@@ -133,10 +133,10 @@ async function linkTree(source: string, target: string, count: LinkCount): Promi
     }
 }
 
-export async function linkCod4Files(dataDir: string): Promise<LinkCount | null> {
+// count: optional, filled while it works (the reinstall shows it as progress)
+export async function linkCod4Files(dataDir: string, count: LinkCount = { linked: 0, copied: 0 }): Promise<LinkCount | null> {
     const target = path.join(dataDir, 'serverfiles');
     if (!(await isEmptyDir(target))) return null;
-    const count: LinkCount = { linked: 0, copied: 0 };
     try {
         await linkTree(cod4FilesDir(), target, count);
     } catch (error) {
@@ -276,10 +276,15 @@ export function cod4MaxPlayers(env: string[] | undefined): number | null {
 
 // the game files of a new server, or of a reinstalled one (server Settings > Game config > Reinstall): linked from the
 // cod4-linux folder, the starting server.cfg (Admin > CoD4 files) and the server's name in it
-export async function prepareCod4ServerFiles(dataDir: string, gameServerName: string, serverName?: string | null): Promise<LinkCount | null> {
+export async function prepareCod4ServerFiles(
+    dataDir: string,
+    gameServerName: string,
+    serverName?: string | null,
+    progress?: LinkCount
+): Promise<LinkCount | null> {
     // checked again here: the folder may have changed since the install was requested
     await assertCod4FilesReady();
-    const count = await linkCod4Files(dataDir);
+    const count = await linkCod4Files(dataDir, progress);
     const { cod4Defaults } = await readAdminSettings();
     if (cod4Defaults.serverCfg.trim()) {
         const cfg = path.join(dataDir, 'serverfiles', 'main', `${path.basename(gameServerName)}.cfg`);

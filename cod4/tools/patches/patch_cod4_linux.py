@@ -166,11 +166,15 @@ if insert('frontend/utils/api.ts', 'async ftpRequest', '  async getCod4FilesStat
           "    return response.data;\n"
           "  }\n\n", after=False):
     changed.add('frontend')
-if insert('frontend/utils/api.ts', 'async reinstallCod4', '  async getCod4FilesStatus() {\n',
-          "  // Call of Duty 4: game files made again from the cod4-linux folder (the server must be stopped)\n"
-          "  async reinstallCod4(serverId: number, keepContent: boolean) {\n"
-          "    const response = await this.client.post(`/api/cod4/reinstall/${serverId}`, { keepContent }, { timeout: 300000 });\n"
-          "    return response.data as { linked: number; copied: number; kept: string[] };\n"
+if insert('frontend/utils/api.ts', 'async cod4Reinstall', '  async getCod4FilesStatus() {\n',
+          "  // Call of Duty 4: game files made again from the cod4-linux folder (the server must be stopped), in the background\n"
+          "  async cod4Reinstall(serverId: number, keepContent: boolean) {\n"
+          "    const response = await this.client.post(`/api/cod4/reinstall/${serverId}`, { keepContent });\n"
+          "    return response.data as import('../components/serverSettings/Cod4ReinstallSection').Cod4ReinstallStatus;\n"
+          "  }\n\n"
+          "  async cod4ReinstallStatus(serverId: number) {\n"
+          "    const response = await this.client.get(`/api/cod4/reinstall/${serverId}`);\n"
+          "    return response.data as { status: import('../components/serverSettings/Cod4ReinstallSection').Cod4ReinstallStatus | null };\n"
           "  }\n\n", after=False):
     changed.add('frontend')
 print(' '.join(sorted(changed)))

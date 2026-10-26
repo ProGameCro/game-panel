@@ -22,13 +22,14 @@ export function GameServersMobileList({
       {filteredAndSortedServers.length === 0 && (
         <div className="rounded-lg border border-dashed border-gray-700 p-6 text-center">
           <p className="text-sm text-gray-400">No game servers yet.</p>
-          <p className="mt-1 text-xs text-gray-500">Use “Add Game Server” to install your first one.</p>
+          <p className="mt-1 text-xs text-gray-500">{canInstall ? 'Use “Add Game Server” to install your first one.' : 'Your servers show up here once they are given to you.'}</p>
         </div>
       )}
       {filteredAndSortedServers.map((server) => (
         <GameServerCard key={server.id} server={server} {...cardActions} />
       ))}
 
+      {canInstall && (
       <div className={`bg-[#1f2937] rounded-lg p-4 border ${cardActions.rowBorder}`}>
         <div className="flex justify-center">
           <AppButton
@@ -52,6 +53,7 @@ export function GameServersMobileList({
           </AppButton>
         </div>
       </div>
+      )}
     </div>
   );
 }

@@ -3,13 +3,27 @@ import path from 'node:path';
 import type { GameServerRow } from '../../types/gameServer.js';
 import * as dockerUtils from '../../utils/docker.js';
 import { getServerStoragePaths } from '../../utils/storage.js';
-import { logInfo } from '../../utils/logger.js';
-import { assertCod4FilesReady, prepareCod4ServerFiles } from '../../providers/linuxgsm/adapters/cod4/index.js';
+import { logError, logInfo } from '../../utils/logger.js';
+import { actionsRepository } from '../../database/index.js';
+import { assertCod4FilesReady, cod4FilesDir, prepareCod4ServerFiles, type LinkCount } from '../../providers/linuxgsm/adapters/cod4/index.js';
 
-// Reinstall of a CoD4 server's game files (server Settings > Game config > Reinstall), for when something got broken:
-// serverfiles is made again from the cod4-linux folder like for a new server (CoD4X, main, zone, starting server.cfg).
-// Kept: the command line (RCON password, slots, FastDL, mod: config-lgsm), B3, backups and the FTP account; the mods
-// and custom maps too unless the user asks to delete them. The server must be stopped.
+// Reinstall of a CoD4 server's game files (server Settings > Game config > Reinstall, or Reinstall in the server list),
+// for when something got broken: serverfiles is made again from the cod4-linux folder like for a new server (CoD4X,
+// main, zone, starting server.cfg). Kept: the command line (RCON password, slots, FastDL, mod: config-lgsm), B3,
+// backups and the FTP account; the mods and custom maps too unless the user asks to delete them. The server must be
+// stopped. It runs in the background (copying a few GB can take minutes); the panel follows it with the status below.
+
+export type ReinstallStatus = {
+    state: 'running' | 'done' | 'error';
+    step: 'checking' | 'removing' | 'copying' | 'config' | 'restoring' | 'done';
+    done: number;
+    total: number;
+    keepContent: boolean;
+    kept: string[];
+    startedAt: number;
+    finishedAt: number | null;
+    error: string | null;
+};
 
 function fail(message: string, statusCode: number): Error {
     return Object.assign(new Error(message), { statusCode });
@@ -26,25 +40,63 @@ function gameServerNameOf(server: GameServerRow): string {
     }
 }
 
-const running = new Set<number>();
+// the files a new server gets from the cod4-linux folder (no logs), for the progress bar
+async function countFiles(dir: string): Promise<number> {
+    let n = 0;
+    for (const entry of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+        if (entry.isDirectory()) n += await countFiles(path.join(dir, entry.name));
+        else if (!/\.log(\.\d+)?$/i.test(entry.name)) n++;
+    }
+    return n;
+}
 
-export async function reinstallCod4Server(server: GameServerRow, keepContent: boolean): Promise<{ linked: number; copied: number; kept: string[] }> {
+const statuses = new Map<number, ReinstallStatus>();
+const progress = new Map<number, LinkCount>();
+
+export function getReinstallStatus(serverId: number): ReinstallStatus | null {
+    const status = statuses.get(serverId);
+    if (!status) return null;
+    const count = progress.get(serverId);
+    return count && status.step === 'copying' ? { ...status, done: count.linked + count.copied } : status;
+}
+
+// checks, then starts the reinstall in the background
+export async function startCod4Reinstall(server: GameServerRow, keepContent: boolean, actor: string): Promise<ReinstallStatus> {
     if (server.provider !== 'linuxgsm') throw fail('Reinstall is only for Call of Duty 4 servers', 400);
     const gameServerName = gameServerNameOf(server);
+    if (statuses.get(server.id)?.state === 'running') throw fail('A reinstall of this server is already running', 409);
     if (server.docker_container_id && (await dockerUtils.checkContainerStatus(server.docker_container_id)) === 'running') {
         throw fail('Stop the server first, then reinstall.', 409);
     }
     // before anything is deleted: the cod4-linux folder and the image must be there
     await assertCod4FilesReady();
-    if (running.has(server.id)) throw fail('A reinstall of this server is already running', 409);
-    running.add(server.id);
+
+    const status: ReinstallStatus = {
+        state: 'running',
+        step: 'checking',
+        done: 0,
+        total: await countFiles(cod4FilesDir()),
+        keepContent,
+        kept: [],
+        startedAt: Date.now(),
+        finishedAt: null,
+        error: null,
+    };
+    statuses.set(server.id, status);
+    void runReinstall(server, gameServerName, status, actor);
+    return status;
+}
+
+async function runReinstall(server: GameServerRow, gameServerName: string, status: ReinstallStatus, actor: string): Promise<void> {
     const dataDir = getServerStoragePaths(server.id).dataDir;
     const serverfiles = path.join(dataDir, 'serverfiles');
     const keepDir = path.join(dataDir, `.reinstall-keep-${Date.now()}`);
-    const kept: string[] = [];
+    const kept = status.kept;
+    const count: LinkCount = { linked: 0, copied: 0 };
+    progress.set(server.id, count);
     try {
         // the mods and maps wait next to it (same disk: a rename, instant)
-        if (keepContent) {
+        if (status.keepContent) {
             await fs.mkdir(keepDir, { recursive: true });
             for (const section of ['mods', 'usermaps']) {
                 const from = path.join(serverfiles, section);
@@ -54,15 +106,22 @@ export async function reinstallCod4Server(server: GameServerRow, keepContent: bo
                 }
             }
         }
+        status.step = 'removing';
         await fs.rm(serverfiles, { recursive: true, force: true });
-        const count = await prepareCod4ServerFiles(dataDir, gameServerName, server.name);
+        status.step = 'copying';
+        await prepareCod4ServerFiles(dataDir, gameServerName, server.name, count);
+        status.done = count.linked + count.copied;
+        status.step = 'restoring';
         for (const section of kept) {
             await fs.rm(path.join(serverfiles, section), { recursive: true, force: true });
             await fs.rename(path.join(keepDir, section), path.join(serverfiles, section));
         }
         await fs.rm(keepDir, { recursive: true, force: true });
+        Object.assign(status, { state: 'done', step: 'done', finishedAt: Date.now() });
         logInfo('LINUXGSM:COD4', `Reinstalled the game files${kept.length ? ` (kept ${kept.join(', ')})` : ''}`, { serverId: server.id });
-        return { linked: count?.linked ?? 0, copied: count?.copied ?? 0, kept };
+        await actionsRepository
+            .create(server.id, 'success', `Game files reinstalled${kept.length ? ' (mods and maps kept)' : ''}`, actor)
+            .catch(() => undefined);
     } catch (error) {
         // whatever was kept goes back, so nothing of the user's is lost
         for (const section of kept) {
@@ -74,8 +133,9 @@ export async function reinstallCod4Server(server: GameServerRow, keepContent: bo
             }
         }
         await fs.rm(keepDir, { recursive: true, force: true }).catch(() => undefined);
-        throw error;
+        Object.assign(status, { state: 'error', finishedAt: Date.now(), error: error instanceof Error ? error.message : String(error) });
+        logError('LINUXGSM:COD4:REINSTALL', error, { serverId: server.id });
     } finally {
-        running.delete(server.id);
+        progress.delete(server.id);
     }
 }

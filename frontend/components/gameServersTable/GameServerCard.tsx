@@ -4,6 +4,7 @@ import {
   Copy,
   Edit2,
   Play,
+  RotateCcw,
   RotateCw,
   Settings,
   Square,
@@ -24,7 +25,8 @@ import {
 import { canOpenServerSettings, formatNetworkSpeed, formatPlayerCount, hasServerPermission, playersHaveNames, type MetricType } from './utils';
 import { getServerStatusPresentation } from './utils';
 import { ODS_CHART_THEME } from '../charts/theme';
-import { GameIcon } from './GameIcon';
+import { GameIcon, isCod4 } from './GameIcon';
+import { Cod4ReinstallDialog } from '../serverSettings/Cod4ReinstallSection';
 import { ownerText, useServerOwners } from './useServerOwners';
 import { AppButton } from '../../src/ui/components';
 
@@ -123,6 +125,8 @@ export function GameServerCard({
   const canTriggerPowerAction = canPowerServer && !isCreating && !isTransitioning;
   const canReadLogs = hasServerPermission(currentUser, permissionsByServer, server.id, 'container.logs.read');
   const canDeleteServer = hasServerPermission(currentUser, permissionsByServer, server.id, 'server.delete');
+  const canReinstall = hasServerPermission(currentUser, permissionsByServer, server.id, 'server.wipe.soft');
+  const [reinstallOpen, setReinstallOpen] = useState(false);
   const canRenameServer = hasServerPermission(currentUser, permissionsByServer, server.id, 'server.edit');
   const canOpenSettings = canOpenServerSettings(currentUser, permissionsByServer, server.id) && !isCreating;
 
@@ -466,6 +470,16 @@ export function GameServerCard({
       </div>
 
       <div className="flex gap-2">
+        {isCod4(server) && canReinstall && (
+          <AppButton
+            onClick={() => setReinstallOpen(true)}
+            aria-label="Reinstall server"
+            className="flex items-center gap-1.5 px-4 py-2 rounded text-sm transition-colors border border-amber-500/40 text-amber-300 hover:bg-amber-500/15"
+          >
+            <RotateCcw className="w-4 h-4" /> Reinstall
+          </AppButton>
+        )}
+        {(canDeleteServer || !isCod4(server)) && (
         <AppButton
           disabled={!canDeleteServer}
           onClick={() => onConfirmAction(server.id, server.name, 'delete')}
@@ -476,7 +490,11 @@ export function GameServerCard({
         >
           <Trash2 className="w-4 h-4" />
         </AppButton>
+        )}
       </div>
+      {reinstallOpen && (
+        <Cod4ReinstallDialog serverId={Number(server.id)} serverName={server.name} serverStatus={server.status} onClose={() => setReinstallOpen(false)} />
+      )}
     </div>
   );
 }

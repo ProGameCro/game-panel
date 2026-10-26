@@ -10,6 +10,7 @@ import {
   ArrowUpDown,
   Play,
   Plus,
+  RotateCcw,
   RotateCw,
   Settings,
   SlidersHorizontal,
@@ -40,7 +41,8 @@ import {
   getServerStatusPresentation,
   hasServerPermission,
 } from './utils';
-import { GameIcon } from './GameIcon';
+import { GameIcon, isCod4 } from './GameIcon';
+import { Cod4ReinstallDialog } from '../serverSettings/Cod4ReinstallSection';
 import { ownerText, useServerOwners } from './useServerOwners';
 import { ODS_CHART_THEME } from '../charts/theme';
 
@@ -143,6 +145,7 @@ export function GameServersDesktopTable({
 }: GameServersDesktopTableProps) {
   // Super Admins see who each server belongs to
   const owners = useServerOwners(Boolean(currentUser?.isRoot));
+  const [reinstallFor, setReinstallFor] = useState<{ id: number; name: string; status?: string | null } | null>(null);
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
@@ -308,7 +311,7 @@ export function GameServersDesktopTable({
             </th>
             <th className={`text-left ${textTertiary} text-xs font-semibold uppercase tracking-wider py-3 px-4`}>Power</th>
             <th className={`text-left ${textTertiary} text-xs font-semibold uppercase tracking-wider py-3 px-4`}>Management</th>
-            <th className={`text-center ${textTertiary} text-xs font-semibold uppercase tracking-wider py-3 px-4`}>Delete</th>
+            <th className={`text-center ${textTertiary} text-xs font-semibold uppercase tracking-wider py-3 px-4`}>{currentUser?.isRoot ? 'Delete' : 'Reinstall'}</th>
           </tr>
         </thead>
         <tbody>
@@ -317,7 +320,7 @@ export function GameServersDesktopTable({
               <td colSpan={(showPlayers ? 9 : 8) + (owners ? 1 : 0)} className="py-12 text-center">
                 <p className={`text-sm ${textTertiary}`}>No game servers yet.</p>
                 <p className={`mt-1 text-xs ${textTertiary}`}>
-                  Use “Add Game Server” below to install your first one.
+                  {canInstall ? 'Use “Add Game Server” below to install your first one.' : 'Your servers show up here once they are given to you.'}
                 </p>
               </td>
             </tr>
@@ -719,6 +722,20 @@ export function GameServersDesktopTable({
                   </div>
                 </td>
                 <td className="py-4 px-4 text-center">
+                  <span className="inline-flex items-center gap-1">
+                  {/* CoD4: reinstall the game files (owners may; Super Admins too, next to Delete) */}
+                  {isCod4(server) && hasServerPermission(currentUser, permissionsByServer, server.id, 'server.wipe.soft') && (
+                    <AppButton
+                      tone="ghost"
+                      title="Reinstall"
+                      aria-label="Reinstall server"
+                      onClick={() => setReinstallFor({ id: Number(server.id), name: server.name, status: server.status })}
+                      className="rounded-lg border-none bg-transparent p-2 text-amber-300 transition-colors hover:bg-amber-500/15 hover:text-amber-200"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                    </AppButton>
+                  )}
+                  {(canDeleteServer || !isCod4(server)) && (
                   <AppButton
                     tone="ghost"
                     disabled={!canDeleteServer}
@@ -738,6 +755,8 @@ export function GameServersDesktopTable({
                   >
                     <Trash2 className="w-4 h-4" />
                   </AppButton>
+                  )}
+                  </span>
                 </td>
               </tr>
             );
@@ -745,6 +764,11 @@ export function GameServersDesktopTable({
         </tbody>
       </AppTable>
     </div>
+    {reinstallFor && (
+      <Cod4ReinstallDialog serverId={reinstallFor.id} serverName={reinstallFor.name} serverStatus={reinstallFor.status} onClose={() => setReinstallFor(null)} />
+    )}
+    {/* users who may not install servers do not get the button at all */}
+    {canInstall && (
     <div className="flex justify-center py-6">
       <AppButton
         type="button"
@@ -768,6 +792,7 @@ export function GameServersDesktopTable({
         <span className="self-center leading-none">Add Game Server</span>
       </AppButton>
     </div>
+    )}
     </div>
   );
 }
