@@ -24,12 +24,21 @@ import { AppButton, AppCard } from '../../src/ui/components';
 import { ConfirmationModal } from '../ConfirmationModal';
 import { NewsEditor } from '../NewsPanel';
 import { usePanelName } from '../../contexts/BrandingContext';
+import type { OverviewServer } from '../../utils/adminApi';
+import { AdminLive } from './AdminLive';
+import { AdminMaps } from './AdminMaps';
+import { AdminContent } from './AdminContent';
+import { AdminB3 } from './AdminB3';
+import { AdminActivity } from './AdminActivity';
+import { ServerPicker, type Cod4Choice } from './shared';
 
 // Admin page (Super Admins): every server at a glance with group actions, what needs attention, FastDL, the host,
 // and the panel's own settings. Server status, metrics and players come from the panel's live data (props);
 // add-ons (B3, FastDL), host data and alerts from /api/admin/overview.
 
-type Tab = 'overview' | 'fastdl' | 'system' | 'panel';
+type Tab = 'overview' | 'live' | 'maps' | 'content' | 'b3' | 'fastdl' | 'system' | 'activity' | 'panel';
+// tabs about one CoD4 server: they share the server choice
+const SERVER_TABS: Tab[] = ['live', 'maps', 'content', 'b3'];
 type BulkAction = 'start' | 'stop' | 'restart';
 
 interface AdminPageProps {
@@ -42,8 +51,13 @@ interface AdminPageProps {
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'overview', label: 'Overview' },
+  { id: 'live', label: 'Players & RCON' },
+  { id: 'maps', label: 'Maps' },
+  { id: 'content', label: 'Mods & maps' },
+  { id: 'b3', label: 'B3' },
   { id: 'fastdl', label: 'FastDL' },
   { id: 'system', label: 'System' },
+  { id: 'activity', label: 'Activity' },
   { id: 'panel', label: 'Panel' },
 ];
 
@@ -122,7 +136,8 @@ function CopyButton({ text }: { text: string }) {
 
 export function AdminPage({ gameServers, serversPlayersById, gameNamesByKey, handleServerAction, setActiveTab }: AdminPageProps) {
   const [tab, setTab] = useState<Tab>('overview');
-  const [overview, setOverview] = useState<AdminOverview | null>(null);
+  const [overview, setOverview] = useState<(Omit<AdminOverview, 'servers'> & { servers: OverviewServer[] }) | null>(null);
+  const [serverId, setServerId] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulk, setBulk] = useState<BulkAction | null>(null);
@@ -132,7 +147,7 @@ export function AdminPage({ gameServers, serversPlayersById, gameNamesByKey, han
 
   const load = useCallback(async (sizes = false) => {
     try {
-      const data = await apiClient.getAdminOverview(sizes);
+      const data = (await apiClient.getAdminOverview(sizes)) as Omit<AdminOverview, 'servers'> & { servers: OverviewServer[] };
       setOverview((prev) => (sizes || !prev?.system.sizes ? data : { ...data, system: { ...data.system, sizes: prev.system.sizes } }));
       setLoadError(null);
     } catch (e) {
@@ -157,11 +172,28 @@ export function AdminPage({ gameServers, serversPlayersById, gameNamesByKey, han
     const known = new Set(fromBackend.map((s) => s.id));
     return [...fromBackend, ...gameServers.filter((s) => !known.has(s.id))].sort((a, b) => Number(a.id) - Number(b.id));
   }, [gameServers, overview]);
+  // players: the panel's live data, or what the backend read from the CoD4 server itself
+  const playersOf = useCallback(
+    (id: string) => {
+      const p = serversPlayersById[id];
+      if (p && p.online !== null) return { online: p.online, max: p.max };
+      const own = addons.get(id)?.players;
+      return own ? { online: own.online, max: own.max } : null;
+    },
+    [serversPlayersById, addons]
+  );
   const totals = useMemo(() => {
     const running = rows.filter((s) => s.status === 'running').length;
-    const players = Object.values(serversPlayersById).reduce((sum, p) => sum + (p?.online ?? 0), 0);
+    const players = rows.reduce((sum, s) => sum + (playersOf(s.id)?.online ?? 0), 0);
     return { running, players };
-  }, [rows, serversPlayersById]);
+  }, [rows, playersOf]);
+  const cod4Servers: Cod4Choice[] = useMemo(
+    () => (overview?.servers ?? []).filter((s) => s.catalogId === 'cod4').map((s) => ({ id: String(s.id), name: s.name, status: s.status })),
+    [overview]
+  );
+  useEffect(() => {
+    if (!serverId && cod4Servers.length > 0) setServerId(cod4Servers[0].id);
+  }, [cod4Servers, serverId]);
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -220,7 +252,10 @@ export function AdminPage({ gameServers, serversPlayersById, gameNamesByKey, han
           <button
             key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
+            onClick={() => {
+              setTab(t.id);
+              setMessage(null);
+            }}
             className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
               tab === t.id
                 ? 'border-[var(--color-cyan-400)] bg-[var(--color-cyan-400)]/15 text-[var(--color-cyan-400)]'
@@ -327,14 +362,28 @@ export function AdminPage({ gameServers, serversPlayersById, gameNamesByKey, han
                   )}
                   {rows.map((s) => {
                     const extra = addons.get(s.id);
-                    const players = serversPlayersById[s.id];
+                    const players = playersOf(s.id);
                     return (
                       <tr key={s.id} className="border-b border-gray-800 last:border-0 hover:bg-white/5">
                         <td className={td}>
                           <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} aria-label={`Select ${s.name}`} />
                         </td>
                         <td className={td}>
-                          <div className="font-semibold text-white">{s.name}</div>
+                          {s.catalogId === 'cod4' ? (
+                            <button
+                              type="button"
+                              className="font-semibold text-white hover:text-[var(--color-cyan-400)] hover:underline"
+                              title="Players & RCON"
+                              onClick={() => {
+                                setServerId(s.id);
+                                setTab('live');
+                              }}
+                            >
+                              {s.name}
+                            </button>
+                          ) : (
+                            <div className="font-semibold text-white">{s.name}</div>
+                          )}
                           <div className="text-xs text-gray-400">#{s.id} · {gameNamesByKey[s.catalogId ?? ''] ?? s.game}</div>
                         </td>
                         <td className={td}><StatusBadge status={s.status} /></td>
@@ -511,6 +560,12 @@ export function AdminPage({ gameServers, serversPlayersById, gameNamesByKey, han
         </div>
       )}
 
+      {SERVER_TABS.includes(tab) && <ServerPicker servers={cod4Servers} value={serverId} onChange={setServerId} />}
+      {tab === 'live' && serverId && <AdminLive serverId={serverId} />}
+      {tab === 'maps' && serverId && <AdminMaps serverId={serverId} />}
+      {tab === 'content' && serverId && <AdminContent serverId={serverId} servers={cod4Servers} />}
+      {tab === 'b3' && serverId && <AdminB3 serverId={serverId} b3State={addons.get(serverId)?.b3?.state ?? null} />}
+      {tab === 'activity' && <AdminActivity />}
       {tab === 'panel' && <PanelSettings setActiveTab={setActiveTab} />}
 
       <ConfirmationModal

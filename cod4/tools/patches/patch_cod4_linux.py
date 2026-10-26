@@ -140,4 +140,17 @@ if insert('frontend/utils/api/types.ts', 'export interface AdminOverview', 'expo
           "  alerts: Array<{ level: 'error' | 'warning'; text: string; serverId?: number }>;\n"
           "}\n\n", after=False):
     changed.add('frontend')
+if insert('backend/src/index.ts', 'middleware/activityLog.js', "import downloadRoutes from './routes/download.js';\n",
+          "import { activityLog } from './middleware/activityLog.js';\n"):
+    changed.add('backend')
+if insert('backend/src/index.ts', "app.use('/api', activityLog)", "app.use(express.urlencoded({ extended: true, limit: API_BODY_LIMIT }));\n",
+          "// activity log for the Admin page (every change made through the panel)\napp.use('/api', activityLog);\n"):
+    changed.add('backend')
+if insert('frontend/utils/api.ts', 'async adminRequest', '  async getCod4FilesStatus() {\n',
+          "  // Admin page calls (live players, RCON, maps, mods, B3, activity): see utils/adminApi.ts\n"
+          "  async adminRequest<T>(method: 'get' | 'post' | 'put' | 'delete', url: string, data?: unknown, params?: Record<string, unknown>) {\n"
+          "    const response = await this.client.request<T>({ method, url: `/api/admin${url}`, data, params, timeout: 120000 });\n"
+          "    return response.data;\n"
+          "  }\n\n", after=False):
+    changed.add('frontend')
 print(' '.join(sorted(changed)))

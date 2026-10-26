@@ -218,6 +218,12 @@ class ApiClient {
     return response.data as { total: number; added: number; removed: number };
   }
 
+  // Admin page calls (live players, RCON, maps, mods, B3, activity): see utils/adminApi.ts
+  async adminRequest<T>(method: 'get' | 'post' | 'put' | 'delete', url: string, data?: unknown, params?: Record<string, unknown>) {
+    const response = await this.client.request<T>({ method, url: `/api/admin${url}`, data, params, timeout: 120000 });
+    return response.data;
+  }
+
   async getCod4FilesStatus() {
     const response = await this.client.get('/api/cod4/files');
     return response.data as Cod4FilesStatus;

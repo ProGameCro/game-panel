@@ -15,6 +15,7 @@ import serverRoutes from './routes/servers.js';
 import systemRoutes from './routes/system.js';
 import catalogRoutes from './routes/catalog.js';
 import downloadRoutes from './routes/download.js';
+import { activityLog } from './middleware/activityLog.js';
 import adminRoutes from './routes/admin.js';
 import newsRoutes from './routes/news.js';
 import cod4Routes from './routes/cod4.js';
@@ -85,6 +86,8 @@ app.options('*', cors(corsOptions));
 // Body parsers
 app.use(express.json({ limit: API_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: API_BODY_LIMIT }));
+// activity log for the Admin page (every change made through the panel)
+app.use('/api', activityLog);
 
 // /api/auth
 app.use('/api/auth', authRoutes);

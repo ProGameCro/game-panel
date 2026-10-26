@@ -7,6 +7,10 @@ import { getConfig } from '../config.js';
 import { serverRepository } from '../database/index.js';
 import { docker } from '../utils/docker/client.js';
 import { getServerStoragePaths } from '../utils/storage.js';
+import type { GameServerRow } from '../types/gameServer.js';
+import { GAMETYPES, STOCK_MAPS, getStatus, parseRconStatus, rcon } from '../services/cod4/tools.js';
+import { b3Query, backupB3Database, findB3Config } from '../services/cod4/b3db.js';
+import { readActivity } from '../middleware/activityLog.js';
 
 // Admin page (Super Admins): everything the panel can tell about the servers' add-ons (B3, FastDL), the host and what
 // needs attention, in one call. Server status, metrics and players come from the endpoints the panel already uses.
@@ -121,7 +125,10 @@ router.get('/overview', async (req: AuthenticatedRequest, res: Response) => {
                 if (b3?.wanted && b3.state !== 'running') {
                     alerts.push({ level: 'error', text: `${row.name}: B3 is ${b3.state}.`, serverId: row.id });
                 }
-                return { id: row.id, name: row.name, catalogId: row.catalog_id, status, desiredState: row.desired_state, b3, fastdl };
+                // CoD4 players straight from the server (the panel's own players query does not cover LinuxGSM games)
+                const live = isCod4 && status === 'running' ? await getStatus(row, 800).catch(() => null) : null;
+                const players = live ? { online: live.players.length, max: live.maxPlayers, map: live.map } : null;
+                return { id: row.id, name: row.name, catalogId: row.catalog_id, status, desiredState: row.desired_state, b3, fastdl, players };
             })
         );
         const b3Ages = servers.map((s) => s.b3?.heartbeatAge).filter((age): age is number => typeof age === 'number');
@@ -241,6 +248,430 @@ router.post('/fastdl/sync', async (_req: AuthenticatedRequest, res: Response) =>
     } catch (error) {
         return res.status(500).json({ error: error instanceof Error ? error.message : 'Could not start the FastDL sync' });
     }
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// One CoD4 server: live players and RCON, maps, mods / maps on disk, B3 (plugins, admins, bans, backup)
+
+function badRequest(message: string): Error {
+    return Object.assign(new Error(message), { statusCode: 400 });
+}
+
+async function cod4Server(id: unknown): Promise<GameServerRow> {
+    const serverId = Number(id);
+    const server = Number.isInteger(serverId) ? await serverRepository.findById(serverId) : null;
+    if (!server) throw Object.assign(new Error('Server not found'), { statusCode: 404 });
+    if (server.catalog_id !== 'cod4') throw Object.assign(new Error('Only for Call of Duty 4 servers'), { statusCode: 400 });
+    return server;
+}
+
+function fail(res: Response, error: unknown, fallback: string) {
+    const statusCode = Number((error as { statusCode?: number })?.statusCode) || 500;
+    return res.status(statusCode).json({ error: error instanceof Error ? error.message : fallback });
+}
+
+// text that goes into an rcon command: no line breaks or quotes, CoD4 colour codes allowed
+const cleanArg = (value: unknown, max = 120) =>
+    String(value ?? '')
+        .replace(/[\x00-\x1f\x7f";]/g, '')
+        .trim()
+        .slice(0, max);
+
+const serverfiles = (server: GameServerRow) => path.join(getServerStoragePaths(server.id).dataDir, 'serverfiles');
+
+// live: players with slot, GUID and IP (rcon status), or the public view (getstatus) without an RCON password
+router.get('/servers/:id/live', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const status = await getStatus(server);
+        let detailed: ReturnType<typeof parseRconStatus> | null = null;
+        let rconError: string | null = null;
+        try {
+            detailed = parseRconStatus(await rcon(server, 'status'));
+        } catch (error) {
+            rconError = error instanceof Error ? error.message : 'RCON failed';
+        }
+        return res.json({
+            online: status !== null,
+            hostname: status?.hostname ?? null,
+            map: detailed?.map ?? status?.map ?? null,
+            gametype: status?.gametype ?? null,
+            maxPlayers: status?.maxPlayers ?? null,
+            players: detailed?.players ?? (status?.players ?? []).map((p, i) => ({ slot: i, score: p.score, ping: String(p.ping), guid: '', steamId: '', name: p.name, ip: null })),
+            rcon: rconError === null,
+            rconError,
+        });
+    } catch (error) {
+        return fail(res, error, 'Could not read the server');
+    }
+});
+
+router.post('/servers/:id/rcon', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const command = String(req.body?.command ?? '').replace(/[\r\n]/g, ' ').trim().slice(0, 300);
+        if (!command) throw badRequest('Empty command');
+        res.locals.activityDetail = `rcon ${command.split(' ')[0]}`;
+        return res.json({ output: await rcon(server, command, 2000) });
+    } catch (error) {
+        return fail(res, error, 'RCON failed');
+    }
+});
+
+router.post('/servers/:id/players/:slot/:action', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const slot = Number(req.params.slot);
+        if (!Number.isInteger(slot) || slot < 0 || slot > 128) throw badRequest('Invalid player slot');
+        const reason = cleanArg(req.body?.reason) || 'admin decision';
+        let command: string;
+        if (req.params.action === 'kick') command = `clientkick ${slot} ${reason}`;
+        else if (req.params.action === 'tempban') {
+            const minutes = Math.max(1, Math.min(60 * 24 * 365, Math.round(Number(req.body?.minutes) || 60)));
+            command = `tempban ${slot} ${minutes}m ${reason}`;
+        } else if (req.params.action === 'ban') command = `permban ${slot} ${reason}`;
+        else throw badRequest('Unknown action');
+        res.locals.activityDetail = `${req.params.action} slot ${slot}: ${reason}`;
+        return res.json({ output: await rcon(server, command) });
+    } catch (error) {
+        return fail(res, error, 'Could not do that');
+    }
+});
+
+router.post('/servers/:id/say', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const message = cleanArg(req.body?.message, 150);
+        if (!message) throw badRequest('Empty message');
+        return res.json({ output: await rcon(server, `say "${message}"`) });
+    } catch (error) {
+        return fail(res, error, 'Could not send the message');
+    }
+});
+
+// maps: stock + the server's usermaps, the rotation from main/cod4server.cfg
+const MAP_NAME = /^[A-Za-z0-9_-]{1,64}$/;
+
+async function serverConfigFile(server: GameServerRow): Promise<string> {
+    return path.join(serverfiles(server), 'main', 'cod4server.cfg');
+}
+
+router.get('/servers/:id/maps', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const usermaps = (await fs.readdir(path.join(serverfiles(server), 'usermaps'), { withFileTypes: true }).catch(() => []))
+            .filter((e) => e.isDirectory() && MAP_NAME.test(e.name))
+            .map((e) => e.name)
+            .sort();
+        const cfg = await fs.readFile(await serverConfigFile(server), 'utf8').catch(() => '');
+        const rotation = /^\s*set[as]?\s+sv_mapRotation\s+"([^"]*)"/im.exec(cfg)?.[1] ?? '';
+        return res.json({ stock: STOCK_MAPS, usermaps, gametypes: GAMETYPES, rotation });
+    } catch (error) {
+        return fail(res, error, 'Could not read the maps');
+    }
+});
+
+router.post('/servers/:id/map', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const map = String(req.body?.map ?? '');
+        const gametype = String(req.body?.gametype ?? '');
+        if (req.body?.rotate) return res.json({ output: await rcon(server, 'map_rotate') });
+        if (!MAP_NAME.test(map)) throw badRequest('Invalid map name');
+        if (gametype && GAMETYPES.includes(gametype)) await rcon(server, `g_gametype ${gametype}`);
+        res.locals.activityDetail = `map ${map}`;
+        return res.json({ output: await rcon(server, `map ${map}`, 3000) });
+    } catch (error) {
+        return fail(res, error, 'Could not change the map');
+    }
+});
+
+// the rotation as a list of { gametype, map }, written to main/cod4server.cfg (a new file in place of the old one)
+router.put('/servers/:id/rotation', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const entries = Array.isArray(req.body?.entries) ? req.body.entries : null;
+        if (!entries || entries.length === 0 || entries.length > 200) throw badRequest('The rotation needs 1 to 200 maps');
+        const parts: string[] = [];
+        let lastType = '';
+        for (const entry of entries) {
+            const map = String(entry?.map ?? '');
+            const gametype = String(entry?.gametype ?? '');
+            if (!MAP_NAME.test(map)) throw badRequest(`Invalid map name: ${map}`);
+            if (gametype && !GAMETYPES.includes(gametype)) throw badRequest(`Invalid gametype: ${gametype}`);
+            if (gametype && gametype !== lastType) {
+                parts.push(`gametype ${gametype}`);
+                lastType = gametype;
+            }
+            parts.push(`map ${map}`);
+        }
+        const line = `set sv_mapRotation "${parts.join(' ')}"`;
+        const file = await serverConfigFile(server);
+        const current = await fs.readFile(file, 'utf8').catch(() => '');
+        const pattern = /^\s*set[as]?\s+sv_mapRotation\s+.*$/im;
+        const next = pattern.test(current) ? current.replace(pattern, line) : `${current}${current && !current.endsWith('\n') ? '\n' : ''}${line}\n`;
+        await fs.mkdir(path.dirname(file), { recursive: true });
+        await fs.writeFile(`${file}.tmp`, next, 'utf8');
+        await fs.rename(`${file}.tmp`, file);
+        // the running server takes the new rotation at once (it is used from the next map on)
+        await rcon(server, line.replace(/^set /, 'set ')).catch(() => undefined);
+        return res.json({ rotation: parts.join(' ') });
+    } catch (error) {
+        return fail(res, error, 'Could not save the rotation');
+    }
+});
+
+// mods and usermaps on disk
+const CONTENT_SECTIONS = new Set(['mods', 'usermaps']);
+const FOLDER_NAME = /^[A-Za-z0-9_.-]{1,64}$/;
+
+router.get('/servers/:id/content', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const result: Record<string, Array<{ name: string; size: number; files: number }>> = {};
+        for (const section of CONTENT_SECTIONS) {
+            const base = path.join(serverfiles(server), section);
+            const items = [];
+            for (const entry of await fs.readdir(base, { withFileTypes: true }).catch(() => [])) {
+                if (!entry.isDirectory()) continue;
+                let size = 0;
+                let files = 0;
+                const walk = async (dir: string): Promise<void> => {
+                    for (const e of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+                        const full = path.join(dir, e.name);
+                        if (e.isDirectory()) await walk(full);
+                        else if (e.isFile()) {
+                            files++;
+                            size += (await fs.stat(full).catch(() => ({ size: 0 }))).size;
+                        }
+                    }
+                };
+                await walk(path.join(base, entry.name));
+                items.push({ name: entry.name, size, files });
+            }
+            result[section] = items.sort((a, b) => a.name.localeCompare(b.name));
+        }
+        return res.json(result);
+    } catch (error) {
+        return fail(res, error, 'Could not read the mods and maps');
+    }
+});
+
+function contentPath(server: GameServerRow, section: string, name: string): string {
+    if (!CONTENT_SECTIONS.has(section) || !FOLDER_NAME.test(name) || name === '.' || name === '..') throw badRequest('Invalid folder');
+    return path.join(serverfiles(server), section, name);
+}
+
+router.delete('/servers/:id/content/:section/:name', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        await fs.rm(contentPath(server, req.params.section, req.params.name), { recursive: true, force: true });
+        res.locals.activityDetail = `deleted ${req.params.section}/${req.params.name}`;
+        return res.json({ success: true });
+    } catch (error) {
+        return fail(res, error, 'Could not delete');
+    }
+});
+
+// copy a mod / map folder to another CoD4 server: big files as hard links, like new servers get them
+async function copyTree(from: string, to: string): Promise<void> {
+    await fs.mkdir(to, { recursive: true });
+    for (const entry of await fs.readdir(from, { withFileTypes: true })) {
+        const a = path.join(from, entry.name);
+        const b = path.join(to, entry.name);
+        if (entry.isDirectory()) await copyTree(a, b);
+        else if (entry.isFile()) {
+            await fs.rm(b, { force: true });
+            const st = await fs.stat(a);
+            if (st.size >= 1024 * 1024) {
+                try {
+                    await fs.link(a, b);
+                    continue;
+                } catch {
+                    // another disk: copy
+                }
+            }
+            await fs.copyFile(a, b);
+        }
+    }
+}
+
+router.post('/servers/:id/content/:section/:name/copy', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const target = await cod4Server(req.body?.targetId);
+        if (target.id === server.id) throw badRequest('Choose another server');
+        const from = contentPath(server, req.params.section, req.params.name);
+        const to = contentPath(target, req.params.section, req.params.name);
+        await copyTree(from, to);
+        res.locals.activityDetail = `copied ${req.params.section}/${req.params.name} to server ${target.id}`;
+        return res.json({ success: true });
+    } catch (error) {
+        return fail(res, error, 'Could not copy');
+    }
+});
+
+// ---- B3
+async function writeB3Control(server: GameServerRow, action: string): Promise<void> {
+    const file = path.join(getServerStoragePaths(server.id).dataDir, 'b3', 'control.json');
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    await fs.writeFile(file, `${JSON.stringify({ action, id }, null, 2)}\n`, 'utf8');
+}
+
+router.post('/servers/:id/b3/:action(start|stop|restart)', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        if (!(await findB3Config(server.id))) throw Object.assign(new Error('B3 is not installed on this server.'), { statusCode: 409 });
+        await writeB3Control(server, req.params.action);
+        return res.json({ success: true });
+    } catch (error) {
+        return fail(res, error, 'Could not send the request to B3');
+    }
+});
+
+// plugins: <plugin name="..." config="..."/> lines in b3.xml; off = the same line inside <!-- -->
+const PLUGIN_LINE = /^(\s*)(<!--\s*)?(<plugin\s+name="([A-Za-z0-9_]+)"[^>]*\/>)(\s*-->)?\s*$/;
+
+router.get('/servers/:id/b3/plugins', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const file = await findB3Config(server.id);
+        if (!file || !file.endsWith('.xml')) throw Object.assign(new Error('B3 with a b3.xml is not installed on this server.'), { statusCode: 409 });
+        const plugins = (await fs.readFile(file, 'utf8'))
+            .split('\n')
+            .map((line) => PLUGIN_LINE.exec(line))
+            .filter((m): m is RegExpExecArray => m !== null)
+            .map((m) => ({ name: m[4], enabled: !m[2], config: /config="([^"]*)"/.exec(m[3])?.[1] ?? null }));
+        const extDir = path.join(path.dirname(path.dirname(file)), 'extplugins');
+        const extplugins = (await fs.readdir(extDir).catch(() => [] as string[]))
+            .filter((n) => n.endsWith('.py') && n !== '__init__.py')
+            .map((n) => n.replace(/\.py$/, ''))
+            .sort();
+        return res.json({ config: path.relative(getServerStoragePaths(server.id).dataDir, file), plugins, extplugins });
+    } catch (error) {
+        return fail(res, error, 'Could not read the B3 plugins');
+    }
+});
+
+router.post('/servers/:id/b3/plugins/:name', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const file = await findB3Config(server.id);
+        if (!file || !file.endsWith('.xml')) throw Object.assign(new Error('B3 with a b3.xml is not installed on this server.'), { statusCode: 409 });
+        const enabled = Boolean(req.body?.enabled);
+        let found = false;
+        const lines = (await fs.readFile(file, 'utf8')).split('\n').map((line) => {
+            const m = PLUGIN_LINE.exec(line);
+            if (!m || m[4] !== req.params.name) return line;
+            found = true;
+            return enabled ? `${m[1]}${m[3]}` : `${m[1]}<!-- ${m[3]} -->`;
+        });
+        if (!found) throw Object.assign(new Error('Plugin not found in b3.xml'), { statusCode: 404 });
+        await fs.writeFile(`${file}.tmp`, lines.join('\n'), 'utf8');
+        await fs.rename(`${file}.tmp`, file);
+        if (req.body?.restart) await writeB3Control(server, 'restart');
+        res.locals.activityDetail = `B3 plugin ${req.params.name} ${enabled ? 'on' : 'off'}`;
+        return res.json({ success: true });
+    } catch (error) {
+        return fail(res, error, 'Could not change the plugin');
+    }
+});
+
+// admins: B3 groups and the players that have one (or match a search)
+const SEARCH = /^[A-Za-z0-9 _.\-\[\]|]{0,32}$/;
+
+router.get('/servers/:id/b3/clients', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const search = String(req.query.search ?? '').trim();
+        if (!SEARCH.test(search)) throw badRequest('Search: letters, numbers, space and _ . - [ ] | only');
+        const groups = await b3Query(server.id, 'SELECT id, name, keyword, level FROM `groups` ORDER BY level');
+        const where = search ? `name LIKE '%${search.replace(/[%_\\']/g, (c) => `\\${c}`)}%'` : 'group_bits > 0';
+        const clients = await b3Query(
+            server.id,
+            `SELECT id, name, guid, group_bits, connections, FROM_UNIXTIME(time_edit) AS last_seen FROM clients WHERE ${where} ORDER BY group_bits DESC, time_edit DESC LIMIT 100`
+        );
+        return res.json({ groups, clients });
+    } catch (error) {
+        return fail(res, error, 'Could not read the B3 players');
+    }
+});
+
+router.put('/servers/:id/b3/clients/:clientId/group', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const clientId = Number(req.params.clientId);
+        const groupId = Number(req.body?.groupId);
+        if (!Number.isInteger(clientId) || clientId < 1) throw badRequest('Invalid player');
+        if (!Number.isInteger(groupId) || groupId < 0) throw badRequest('Invalid group');
+        const groups = await b3Query(server.id, `SELECT id FROM \`groups\` WHERE id = ${groupId}`);
+        if (groupId !== 0 && groups.length === 0) throw badRequest('Unknown group');
+        await b3Query(server.id, `UPDATE clients SET group_bits = ${groupId} WHERE id = ${clientId}`);
+        res.locals.activityDetail = `B3 player ${clientId} group ${groupId}`;
+        return res.json({ success: true });
+    } catch (error) {
+        return fail(res, error, 'Could not change the group');
+    }
+});
+
+router.get('/servers/:id/b3/bans', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const bans = await b3Query(
+            server.id,
+            "SELECT p.id, p.type, p.reason, FROM_UNIXTIME(p.time_add) AS added, IF(p.time_expire <= 0, '', FROM_UNIXTIME(p.time_expire)) AS expires, " +
+                "c.name AS player, c.guid, a.name AS admin FROM penalties p JOIN clients c ON c.id = p.client_id LEFT JOIN clients a ON a.id = p.admin_id " +
+                "WHERE p.type IN ('Ban', 'TempBan') AND p.inactive = 0 AND (p.time_expire <= 0 OR p.time_expire > UNIX_TIMESTAMP()) " +
+                'ORDER BY p.time_add DESC LIMIT 200'
+        );
+        return res.json({ bans });
+    } catch (error) {
+        return fail(res, error, 'Could not read the bans');
+    }
+});
+
+router.post('/servers/:id/b3/bans/:banId/unban', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const banId = Number(req.params.banId);
+        if (!Number.isInteger(banId) || banId < 1) throw badRequest('Invalid ban');
+        await b3Query(server.id, `UPDATE penalties SET inactive = 1 WHERE id = ${banId}`);
+        res.locals.activityDetail = `B3 unban ${banId}`;
+        return res.json({ success: true });
+    } catch (error) {
+        return fail(res, error, 'Could not lift the ban');
+    }
+});
+
+router.post('/servers/:id/b3/backup', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        return res.json(await backupB3Database(server.id));
+    } catch (error) {
+        return fail(res, error, 'Backup failed');
+    }
+});
+
+router.get('/servers/:id/b3/backups', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const server = await cod4Server(req.params.id);
+        const dir = path.join(getServerStoragePaths(server.id).dataDir, 'b3-backups');
+        const files = [];
+        for (const name of await fs.readdir(dir).catch(() => [] as string[])) {
+            if (!name.endsWith('.sql')) continue;
+            const st = await fs.stat(path.join(dir, name)).catch(() => null);
+            if (st) files.push({ file: `b3-backups/${name}`, size: st.size, time: st.mtimeMs });
+        }
+        return res.json({ backups: files.sort((a, b) => b.time - a.time) });
+    } catch (error) {
+        return fail(res, error, 'Could not list the backups');
+    }
+});
+
+// ---- activity log
+router.get('/activity', async (req: AuthenticatedRequest, res: Response) => {
+    const limit = Math.max(1, Math.min(1000, Number(req.query.limit) || 200));
+    return res.json({ entries: await readActivity(limit) });
 });
 
 export default router;

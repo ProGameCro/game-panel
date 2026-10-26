@@ -12,7 +12,7 @@ installed through LinuxGSM. Everything was built and tested on **Ubuntu 24.04**.
   The install form checks the folder first and has a *Slots* field.
 - **phpMyAdmin** for the B3 database at `https://<panel domain>/pma/`.
 - **FastDL** for mods and maps, one per server: `/var/www/html/cod4/<server>` at `http://<panel domain>:8080/cod4/<server>`, synced by the service `gamepanel-fastdl`, on for new servers.
-- **Admin page** (Super Admins): all servers with group actions and alerts, FastDL, host, panel settings.
+- **Admin page** (Super Admins): all servers with group actions and alerts, live players with kick / ban and an RCON console, maps and rotation, mods / maps upload and copy, B3 plugins / admins / bans / backup, FastDL, host, activity log, panel settings.
 - **Neon theme**: an animated theme (aurora lights, moving grid, glass cards) in cyan or orange, switched with the ✨ button in the sidebar.
 - **Panel name**: admins can replace the *OVHcloud Game Panel* logo with their own name (user menu ⋮ → Panel name).
 
