@@ -125,6 +125,16 @@ set sv_wwwBaseURL "http://<panel domain>:8080/cod4/<server number>"
 set sv_wwwDlDisconnected "0"
 ```
 
+### FTP / SFTP (`gp-ftp.sh`)
+
+Upload mods, maps and configs with FileZilla or any FTP / SFTP program instead of the panel's File Manager. On the panel server:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ProGameCro/game-panel/main/cod4/install/gp-ftp.sh -o gp-ftp.sh && bash gp-ftp.sh
+```
+
+Every server gets its own account (`ftp<server number>`), opened in the server's Settings → Game config → FTP access (or Admin → FTP for all servers). The account sees the server's `serverfiles` folder, like the File Manager; files uploaded this way belong to the game server, so it can use them right away. FTP and FTPS (explicit TLS with the panel's Let's Encrypt certificate) on port 21 with passive ports 50000-50100, SFTP on port 2022. Settings → FTP access shows the host, username and password, and makes a new password or closes the account. Too many wrong logins from one address block it for a while. If the server has a firewall (for example OVH's Network firewall), open those ports there. `FTP_PORT`, `SFTP_PORT` and `FTP_PASSIVE` choose other ports, `bash gp-ftp.sh --remove` removes the service (the accounts stay for a reinstall).
+
 ### Troubleshooting
 
 | Problem | Fix |

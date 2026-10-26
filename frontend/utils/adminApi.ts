@@ -35,6 +35,14 @@ export type Cod4FilesInfo = {
   servers: Array<{ id: number; name: string }>;
   refresh: { running: boolean; serverId: number | null; startedAt: number | null; finishedAt: number | null; linked: number; copied: number; error: string | null };
 };
+export type FtpOverview = {
+  installed: boolean;
+  running: boolean;
+  host: string | null;
+  ftpPort: number | null;
+  sftpPort: number | null;
+  servers: Array<{ id: number; name: string; username: string | null; password: string | null }>;
+};
 export type PanelTheme = 'orange' | 'cyan' | 'dark' | 'light';
 export type ActivityEntry = { time: number; user: string | null; method: string; path: string; status: number; detail?: string };
 
@@ -84,6 +92,9 @@ export const adminApi = {
   refreshCod4Files: (serverId: number) => req<{ started: boolean }>('post', '/cod4-files/refresh', { serverId }),
   saveAppearance: (patch: { defaultTheme?: PanelTheme; loginFooter?: string }) =>
     req<{ name: string | null; defaultTheme: PanelTheme; loginFooter: string }>('put', '/appearance', patch),
+  ftp: () => req<FtpOverview>('get', '/ftp'),
+  ftpOpen: (id: number, reset = false) => req<{ username: string; password: string }>('post', `/ftp/${id}`, { reset }),
+  ftpClose: (id: number) => req<{ success: boolean }>('delete', `/ftp/${id}`),
   activity: (limit = 300) => req<{ entries: ActivityEntry[] }>('get', '/activity', undefined, { limit }),
 };
 

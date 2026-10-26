@@ -1,6 +1,6 @@
 """Registers the CoD4 files status: /api/cod4 in the backend, apiClient.getCod4FilesStatus() in the frontend,
 apiClient.setSuperAdmin() for the Super Admin button in User Administration, and the panel's own news (/api/news),
-and the Admin page (/api/admin).
+the Admin page (/api/admin) and FTP accounts (/api/ftp).
 Small insertions (these files are also changed by other installers). Safe to run again. Usage: patch_cod4_linux.py <app>"""
 import os, sys
 
@@ -150,6 +150,19 @@ if insert('frontend/utils/api.ts', 'async adminRequest', '  async getCod4FilesSt
           "  // Admin page calls (live players, RCON, maps, mods, B3, activity): see utils/adminApi.ts\n"
           "  async adminRequest<T>(method: 'get' | 'post' | 'put' | 'delete', url: string, data?: unknown, params?: Record<string, unknown>) {\n"
           "    const response = await this.client.request<T>({ method, url: `/api/admin${url}`, data, params, timeout: 120000 });\n"
+          "    return response.data;\n"
+          "  }\n\n", after=False):
+    changed.add('frontend')
+if insert('backend/src/index.ts', "routes/ftp.js", "import downloadRoutes from './routes/download.js';\n",
+          "import ftpRoutes from './routes/ftp.js';\n"):
+    changed.add('backend')
+if insert('backend/src/index.ts', "app.use('/api/ftp'", "app.use('/api/catalog', authMiddleware, catalogRoutes);\n",
+          "// /api/ftp (FTP / SFTP access to a server's files, gp-ftp.sh)\napp.use('/api/ftp', ftpRoutes);\n"):
+    changed.add('backend')
+if insert('frontend/utils/api.ts', 'async ftpRequest', '  async getCod4FilesStatus() {\n',
+          "  // FTP / SFTP access to a server's files (gp-ftp.sh): see components/serverSettings/FtpSection.tsx\n"
+          "  async ftpRequest<T>(method: 'get' | 'post' | 'delete', serverId: number, data?: unknown) {\n"
+          "    const response = await this.client.request<T>({ method, url: `/api/ftp/${serverId}`, data });\n"
           "    return response.data;\n"
           "  }\n\n", after=False):
     changed.add('frontend')

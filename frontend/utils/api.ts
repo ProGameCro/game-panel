@@ -224,6 +224,12 @@ class ApiClient {
     return response.data;
   }
 
+  // FTP / SFTP access to a server's files (gp-ftp.sh): see components/serverSettings/FtpSection.tsx
+  async ftpRequest<T>(method: 'get' | 'post' | 'delete', serverId: number, data?: unknown) {
+    const response = await this.client.request<T>({ method, url: `/api/ftp/${serverId}`, data });
+    return response.data;
+  }
+
   async getCod4FilesStatus() {
     const response = await this.client.get('/api/cod4/files');
     return response.data as Cod4FilesStatus;

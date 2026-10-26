@@ -5,6 +5,7 @@ import { getGameAdapter } from '../providers/linuxgsm/adapters/registry.js';
 import { bus } from '../realtime/bus.js';
 import type { GameServerRow } from '../types/gameServer.js';
 import { ensureServerDataDirs, ensureServerMountDirs, removeServerDataDir } from '../utils/storage.js';
+import { deleteFtpAccountBestEffort } from './ftp.js';
 import { logError } from '../utils/logger.js';
 import { nowIso } from '../utils/time.js';
 import {
@@ -275,6 +276,9 @@ export async function deleteServerBestEffort(serverId: number): Promise<void> {
     } catch (err) {
         logError('SERVICE:SERVER_DELETE:MANAGED_CONTAINERS', err, { serverId });
     }
+
+    // its FTP account (gp-ftp.sh), before its folder goes
+    await deleteFtpAccountBestEffort(serverId);
 
     try {
         await removeServerDataDir(serverId);

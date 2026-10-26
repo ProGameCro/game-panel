@@ -16,6 +16,7 @@ import { backupServerConfigs, deleteBackup, listBackups, runAutoBackup, startAut
 import { checkCod4Files, cod4FilesDir, cod4FilesHostDir } from '../providers/linuxgsm/adapters/cod4/index.js';
 import { certificateInfo } from '../services/cod4/cert.js';
 import { writeBranding } from './branding.js';
+import { ensureFtpAccount, deleteFtpAccount, ftpRunning, listFtpAccounts, readFtpConfig } from '../services/ftp.js';
 
 // Admin page (Super Admins): everything the panel can tell about the servers' add-ons (B3, FastDL), the host and what
 // needs attention, in one call. Server status, metrics and players come from the endpoints the panel already uses.
@@ -211,6 +212,10 @@ router.get('/overview', async (req: AuthenticatedRequest, res: Response) => {
                 alerts.push({ level: 'warning', text: `Container ${c.name} is ${c.state}.` });
             }
         }
+
+        // ---- FTP (gp-ftp.sh)
+        const ftpConfig = await readFtpConfig();
+        if (ftpConfig && !(await ftpRunning())) alerts.push({ level: 'error', text: 'The FTP service (gamepanel-ftp) is not running: bash gp-ftp.sh' });
 
         // ---- the panel's HTTPS certificate
         const cert = await certificateInfo();
@@ -1074,6 +1079,54 @@ router.put('/appearance', async (req: AuthenticatedRequest, res: Response) => {
         return res.json(await writeBranding(patch));
     } catch (error) {
         return fail(res, error, 'Could not save the look');
+    }
+});
+
+// ---- FTP accounts (gp-ftp.sh): one per server
+router.get('/ftp', async (_req: AuthenticatedRequest, res: Response) => {
+    try {
+        const config = await readFtpConfig();
+        const servers = await serverRepository.listAll();
+        const accounts = await listFtpAccounts();
+        return res.json({
+            installed: Boolean(config),
+            running: config ? await ftpRunning() : false,
+            host: config?.host ?? null,
+            ftpPort: config?.ftpPort ?? null,
+            sftpPort: config?.sftpPort ?? null,
+            servers: servers
+                .filter((s) => s.provider === 'linuxgsm')
+                .map((s) => {
+                    const account = accounts.find((a) => a.serverId === s.id);
+                    return { id: s.id, name: s.name, username: account?.username ?? null, password: account?.password ?? null };
+                }),
+        });
+    } catch (error) {
+        return fail(res, error, 'Could not list the FTP accounts');
+    }
+});
+
+router.post('/ftp/:id', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || !(await serverRepository.findById(id))) throw Object.assign(new Error('Server not found'), { statusCode: 404 });
+        const account = await ensureFtpAccount(id, Boolean(req.body?.reset));
+        res.locals.activityDetail = `FTP ${req.body?.reset ? 'password reset' : 'account'} ${account.username}`;
+        return res.json(account);
+    } catch (error) {
+        return fail(res, error, 'Could not open the FTP account');
+    }
+});
+
+router.delete('/ftp/:id', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id)) throw badRequest('Invalid server');
+        await deleteFtpAccount(id);
+        res.locals.activityDetail = `FTP account of server ${id} closed`;
+        return res.json({ success: true });
+    } catch (error) {
+        return fail(res, error, 'Could not close the FTP account');
     }
 });
 

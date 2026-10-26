@@ -34,13 +34,14 @@ import { AdminActivity } from './AdminActivity';
 import { AdminServerCfg } from './AdminServerCfg';
 import { AdminBackups } from './AdminBackups';
 import { AdminCod4Files } from './AdminCod4Files';
+import { AdminFtp } from './AdminFtp';
 import { ServerPicker, type Cod4Choice } from './shared';
 
 // Admin page (Super Admins): every server at a glance with group actions, what needs attention, FastDL, the host,
 // and the panel's own settings. Server status, metrics and players come from the panel's live data (props);
 // add-ons (B3, FastDL), host data and alerts from /api/admin/overview.
 
-type Tab = 'overview' | 'live' | 'maps' | 'config' | 'content' | 'b3' | 'backups' | 'cod4files' | 'fastdl' | 'system' | 'activity' | 'panel';
+type Tab = 'overview' | 'live' | 'maps' | 'config' | 'content' | 'b3' | 'backups' | 'cod4files' | 'fastdl' | 'ftp' | 'system' | 'activity' | 'panel';
 // tabs about one CoD4 server: they share the server choice
 const SERVER_TABS: Tab[] = ['live', 'maps', 'config', 'content', 'b3'];
 type BulkAction = 'start' | 'stop' | 'restart';
@@ -63,6 +64,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'backups', label: 'Backups' },
   { id: 'cod4files', label: 'CoD4 files' },
   { id: 'fastdl', label: 'FastDL' },
+  { id: 'ftp', label: 'FTP' },
   { id: 'system', label: 'System' },
   { id: 'activity', label: 'Activity' },
   { id: 'panel', label: 'Panel' },
@@ -575,6 +577,7 @@ export function AdminPage({ gameServers, serversPlayersById, gameNamesByKey, han
       {tab === 'config' && serverId && <AdminServerCfg serverId={serverId} />}
       {tab === 'backups' && <AdminBackups servers={cod4Servers} serverId={serverId} onServer={setServerId} />}
       {tab === 'cod4files' && <AdminCod4Files />}
+      {tab === 'ftp' && <AdminFtp />}
       {tab === 'activity' && <AdminActivity />}
       {tab === 'panel' && <PanelSettings setActiveTab={setActiveTab} />}
 
@@ -733,7 +736,7 @@ function PanelSettings({ setActiveTab }: { setActiveTab: (tab: string) => void }
         </h2>
         <p className="text-sm text-gray-400">
           On the panel server: <code>bash gp-cod4-linux.sh</code> (panel), <code>bash gp-neon-theme.sh</code> (theme),{' '}
-          <code>bash gp-fastdl.sh</code> (FastDL), <code>bash gp-b3.sh</code> (B3).
+          <code>bash gp-fastdl.sh</code> (FastDL), <code>bash gp-b3.sh</code> (B3), <code>bash gp-ftp.sh</code> (FTP).
         </p>
       </AppCard>
     </div>

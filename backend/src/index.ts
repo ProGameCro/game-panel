@@ -17,6 +17,7 @@ import catalogRoutes from './routes/catalog.js';
 import downloadRoutes from './routes/download.js';
 import { activityLog } from './middleware/activityLog.js';
 import adminRoutes from './routes/admin.js';
+import ftpRoutes from './routes/ftp.js';
 import newsRoutes from './routes/news.js';
 import cod4Routes from './routes/cod4.js';
 import brandingRoutes from './routes/branding.js';
@@ -105,6 +106,8 @@ app.use('/api/servers', authMiddleware, serverRoutes);
 app.use('/api/catalog', authMiddleware, catalogRoutes);
 // /api/admin (Admin page, Super Admins)
 app.use('/api/admin', adminRoutes);
+// /api/ftp (FTP / SFTP access to a server's files, gp-ftp.sh)
+app.use('/api/ftp', ftpRoutes);
 // /api/news (the news bar, written by the panel's admins)
 app.use('/api/news', newsRoutes);
 // /api/cod4 (Call of Duty 4: game files status)

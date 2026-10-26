@@ -3,6 +3,7 @@ import { AlertTriangle, Check, CheckCircle2, Copy, Eye, EyeOff, FolderOpen, Refr
 import { apiClient } from '../../utils/api';
 import { AppButton, AppInput, AppSelect } from '../../src/ui/components';
 import { RestartToApplyNote } from './RestartToApplyNote';
+import { FtpSection } from './FtpSection';
 
 // Call of Duty 4 (LinuxGSM cod4server) command line, edited like on CoD4X hosting panels:
 // +set sv_authtoken, r_xassetnum (materials / xanims / xmodels), +set fs_game and rcon_password.
@@ -382,6 +383,7 @@ export function Cod4ModSection({
   const assetLabel = { material: 'Materials', xanim: 'Xanims', xmodel: 'Xmodels' } as const;
 
   return (
+    <>
     <section className={`mb-4 rounded-xl border ${borderColor} ${contentBg} p-4 sm:p-5`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -653,5 +655,14 @@ export function Cod4ModSection({
         </div>
       )}
     </section>
+    <FtpSection
+      serverId={serverId}
+      canWrite={canWriteFileManager}
+      borderColor={borderColor}
+      contentBg={contentBg}
+      textPrimary={textPrimary}
+      textSecondary={textSecondary}
+    />
+    </>
   );
 }
