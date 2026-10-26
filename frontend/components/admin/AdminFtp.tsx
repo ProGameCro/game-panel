@@ -182,10 +182,12 @@ export function AdminFtp() {
 
       <Panel title="Accounts" icon={<KeyRound className="h-4 w-4" />}>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px]">
+          <table className="w-full min-w-[980px]">
             <thead>
               <tr>
                 <th className={th}>Server</th>
+                <th className={th}>Host</th>
+                <th className={th}>Port</th>
                 <th className={th}>Username</th>
                 <th className={th}>Password</th>
                 <th className={th}>Online</th>
@@ -200,12 +202,33 @@ export function AdminFtp() {
                     <td className={td}>
                       {s.name} <span className="text-xs text-gray-500">#{s.id}</span>
                     </td>
+                    <td className={td}>{data.host && <Copyable value={data.host} />}</td>
+                    <td className={`${td} whitespace-nowrap text-xs`}>
+                      <div>
+                        FTP / FTPS <Copyable value={String(data.ftpPort ?? '')} />
+                      </div>
+                      <div>
+                        SFTP <Copyable value={String(data.sftpPort ?? '')} />
+                      </div>
+                    </td>
                     <td className={td}>{s.username ? <Copyable value={s.username} /> : <span className="font-mono text-xs text-gray-500">no account</span>}</td>
                     <td className={td}>{s.password && <Copyable value={s.password} secret />}</td>
                     <td className={td}>{online > 0 ? <span className="text-emerald-300">{online} connected</span> : <span className="text-gray-500">–</span>}</td>
                     <td className={`${td} whitespace-nowrap text-right`}>
                       {s.username ? (
                         <span className="inline-flex gap-1.5">
+                          <SmallButton
+                            title="Copy host, ports, username and password (to send to the user)"
+                            onClick={() =>
+                              void navigator.clipboard
+                                ?.writeText(
+                                  `${s.name}\nHost: ${data.host}\nFTP / FTPS port: ${data.ftpPort} (FileZilla: Require explicit FTP over TLS)\nSFTP port: ${data.sftpPort}\nUsername: ${s.username}\nPassword: ${s.password}`
+                                )
+                                .then(() => setResult({ ok: true, text: `FTP details of ${s.name} copied.` }))
+                            }
+                          >
+                            <Copy className="h-3.5 w-3.5" /> Copy all
+                          </SmallButton>
                           <SmallButton disabled={busy} onClick={() => setConfirm({ kind: 'reset', id: s.id, name: s.name })}>
                             <KeyRound className="h-3.5 w-3.5" /> New password
                           </SmallButton>
