@@ -6,12 +6,15 @@ import base64, hashlib, os, subprocess, sys
 ROOT = os.environ.get('ROOT', os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 OUT = os.environ.get('OUT', os.path.join(ROOT, 'cod4', 'install', 'gp-neon-theme.sh'))
 PRISTINE = os.environ.get('PRISTINE', 'ef90e58')   # Game Panel 1.6.0
-PREVIOUS = os.environ.get('PREVIOUS', 'f0f785f abc41db 9ec37bd').split()   # earlier Neon versions
+# every version of these files in this repository's history counts as known
+PREVIOUS = subprocess.run(['git', '-C', ROOT, 'rev-list', '--reverse', '%s..HEAD' % PRISTINE],
+                          capture_output=True, check=True).stdout.decode().split()
 FILES = {
     'frontend': ['main.tsx', 'App.tsx', 'components/Sidebar.tsx', 'components/Login.tsx', 'components/app/AppShell.tsx',
-                 'utils/api.ts', 'contexts/ThemeContext.tsx', 'contexts/BrandingContext.tsx', 'src/ui/theme/neon.css'],
-    'backend': ['src/index.ts', 'src/routes/branding.ts'],
+                 'contexts/ThemeContext.tsx', 'contexts/BrandingContext.tsx', 'src/ui/theme/neon.css'],
+    'backend': ['src/routes/branding.ts'],
 }
+# index.ts and api.ts are changed by other installers too: they only get small insertions (BRANDING_PATCH)
 
 def git_show(rev, path):
     p = subprocess.run(['git', '-C', ROOT, 'show', '%s:%s' % (rev, path)], capture_output=True)
@@ -49,6 +52,40 @@ py += [']',
 'print(" ".join(sorted(changed)))']
 payload = base64.b64encode('\n'.join(py).encode()).decode()
 
+branding_py = r"""import os, sys
+root, backup = sys.argv[1], sys.argv[2]
+changed = set()
+def insert(part, rel, marker, anchor, text, after=True):
+    path = os.path.join(root, rel)
+    s = open(path).read()
+    if marker in s:
+        return
+    if s.count(anchor) != 1:
+        sys.exit('%s: unknown version (anchor not found). Nothing more was changed.' % rel)
+    orig = os.path.join(backup, rel + '.orig')
+    if not os.path.exists(orig):
+        os.makedirs(os.path.dirname(orig), exist_ok=True)
+        open(orig, 'w').write(s)
+    open(path, 'w').write(s.replace(anchor, anchor + text if after else text + anchor))
+    changed.add(part)
+insert('backend', 'backend/src/index.ts', 'routes/branding.js', "import downloadRoutes from './routes/download.js';\n",
+       "import brandingRoutes from './routes/branding.js';\n")
+insert('backend', 'backend/src/index.ts', "app.use('/api/branding'", "app.use('/api/download', downloadRoutes);\n",
+       "// /api/branding (custom panel name; reading needs no login)\napp.use('/api/branding', brandingRoutes);\n")
+insert('frontend', 'frontend/utils/api.ts', 'getBranding', '  async installServer(payload: {\n',
+       "  // custom panel name (null = the OVHcloud logo); reading needs no login\n"
+       "  async getBranding() {\n"
+       "    const response = await this.client.get('/api/branding');\n"
+       "    return response.data as { name: string | null };\n"
+       "  }\n\n"
+       "  async setBranding(name: string) {\n"
+       "    const response = await this.client.put('/api/branding', { name });\n"
+       "    return response.data as { name: string | null };\n"
+       "  }\n\n", after=False)
+print(' '.join(sorted(changed)))
+"""
+branding = base64.b64encode(branding_py.encode()).decode()
+
 script = r'''#!/usr/bin/env bash
 # OVHcloud Game Panel: Neon theme (animated, cyan or orange) and a custom panel name.
 # - ✨ button next to the light/dark button (sidebar): off → Neon → Neon orange → off
@@ -75,6 +112,8 @@ restore(){
 }
 changed="$(echo '__PAYLOAD__' | base64 -d | python3 - "$SRC" "$backup")"
 trap 'rc=$?; ((rc)) && restore' EXIT
+changed="$changed $(echo '__BRANDING__' | base64 -d | python3 - "$SRC" "$backup")"
+changed="${changed# }"; changed="${changed% }"
 dc(){ docker compose --project-name gamepanel --env-file "$DEPLOY/.env" -f "$DEPLOY/compose.yml" "$@"; }
 if [[ -z $changed ]]; then
   echo "Neon tema i ime panela su već instalirani."
@@ -89,8 +128,9 @@ echo "Gotovo. Panel: Ctrl+Shift+R."
 echo " - Tema: gumb ✨ dolje u bočnom izborniku (isključeno → Neon → Neon narančasti → isključeno)."
 echo " - Ime panela: ⋮ (izbornik korisnika) → Panel name (samo admin)."
 echo "Nakon nadogradnje Game Panela ponovno pokreni: sudo bash $0"
-'''.replace('__PAYLOAD__', payload)
+'''.replace('__PAYLOAD__', payload).replace('__BRANDING__', branding)
 open(OUT, 'w').write(script)
+os.chmod(OUT, 0o755)
 print(OUT, len(script))
 for part, rel, data, priors, new in entries:
     print('  %-40s %s' % (rel, 'new' if new else '%d known prior state(s)' % len(priors)))
