@@ -195,6 +195,65 @@ html.gp-neon .gp-settings-modal > div {
   box-shadow: 0 0 0 1px rgb(var(--neon-a) / 0.25), 0 20px 60px -20px rgb(var(--neon-b) / 0.6);
 }
 
+/* ── server list and cards (fixed blue / slate colours in the components) ── */
+html.gp-neon .dark\:bg-\[\#1f2937\] {
+  background-color: color-mix(in srgb, var(--gp-neon-s2) 88%, transparent);
+}
+
+html.gp-neon .dark\:border-gray-800,
+html.gp-neon .dark\:border-gray-700 {
+  border-color: var(--gp-neon-line);
+}
+
+html.gp-neon .dark\:bg-gray-800 {
+  background-color: var(--gp-neon-s1);
+}
+
+html.gp-neon .dark\:bg-gray-700 {
+  background-color: rgb(var(--neon-a) / 0.14);
+}
+
+html.gp-neon .dark\:hover\:bg-gray-700:hover {
+  background-color: rgb(var(--neon-a) / 0.12);
+}
+
+html.gp-neon .hover\:border-\[\#157EEA\]\/60:hover {
+  border-color: rgb(var(--neon-a) / 0.6);
+}
+
+/* Settings and Log/Console buttons */
+html.gp-neon .gp-btn-settings:not(:disabled) {
+  background-color: var(--gp-neon-s3) !important;
+  border: 1px solid var(--gp-neon-edge);
+  color: #fff !important;
+}
+
+html.gp-neon .gp-btn-settings:not(:disabled):hover {
+  border-color: rgb(var(--neon-a) / 0.6);
+  background-color: color-mix(in srgb, var(--gp-neon-s3) 70%, rgb(var(--neon-a)) 30%) !important;
+}
+
+html.gp-neon .gp-btn-console-mobile:not(:disabled),
+html.gp-neon .gp-btn-logs:not(:disabled) {
+  background-image: var(--gp-neon-btn) !important;
+  background-size: 300% 100% !important;
+  background-color: transparent !important;
+  color: #fff !important;
+  box-shadow: 0 0 14px -4px rgb(var(--neon-b) / 0.7);
+  animation: gp-neon-flow 8s linear infinite;
+}
+
+/* CPU / memory / disk bars (their colour is an inline style) */
+html.gp-neon .h-1\.5.rounded-full > div[style] {
+  background-color: rgb(var(--neon-a)) !important;
+  background-image: linear-gradient(90deg, rgb(var(--neon-a)), rgb(var(--neon-c)));
+  box-shadow: 0 0 6px rgb(var(--neon-a) / 0.6);
+}
+
+html.gp-neon .dark\:text-blue-400 {
+  color: rgb(var(--neon-c));
+}
+
 /* ── sidebar with a slowly moving neon edge ── */
 html.gp-neon aside.border-r {
   background: linear-gradient(180deg, color-mix(in srgb, var(--gp-neon-bg) 82%, rgb(var(--neon-a)) 6%), color-mix(in srgb, var(--gp-neon-bg) 80%, rgb(var(--neon-b)) 10%));
@@ -347,7 +406,9 @@ html.gp-neon .gp-login-submit:not(:disabled) {
   html.gp-neon .gp-neon-toggle,
   html.gp-neon .gp-panel-name,
   html.gp-neon .gp-app-button--primary,
-  html.gp-neon .gp-login-submit {
+  html.gp-neon .gp-login-submit,
+  html.gp-neon .gp-btn-console-mobile,
+  html.gp-neon .gp-btn-logs {
     animation: none !important;
   }
 }
