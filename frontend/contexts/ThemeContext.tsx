@@ -11,6 +11,8 @@ interface ThemeContextValue {
   neon: NeonColor;
   // off → cyan → orange → off
   toggleNeon: () => void;
+  // the login page is always shown in the Neon theme (orange when Neon is off)
+  setLoginScreen: (on: boolean) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
@@ -18,6 +20,7 @@ const ThemeContext = createContext<ThemeContextValue>({
   toggleTheme: () => {},
   neon: 'off',
   toggleNeon: () => {},
+  setLoginScreen: () => {},
 });
 
 export function useTheme() {
@@ -42,7 +45,10 @@ const NEXT_NEON: Record<NeonColor, NeonColor> = { off: 'cyan', cyan: 'orange', o
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const [neon, setNeon] = useState<NeonColor>(getInitialNeon);
-  const effectiveTheme: Theme = neon !== 'off' ? 'dark' : theme;
+  const [loginScreen, setLoginScreen] = useState(false);
+  // what is shown: the login page uses orange Neon when Neon is off; the saved choice stays as it is
+  const shownNeon: NeonColor = neon === 'off' && loginScreen ? 'orange' : neon;
+  const effectiveTheme: Theme = shownNeon !== 'off' ? 'dark' : theme;
 
   useEffect(() => {
     const root = document.documentElement;
@@ -51,11 +57,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } else {
       root.classList.remove('dark');
     }
-    root.classList.toggle('gp-neon', neon !== 'off');
-    root.classList.toggle('gp-neon-orange', neon === 'orange');
+    root.classList.toggle('gp-neon', shownNeon !== 'off');
+    root.classList.toggle('gp-neon-orange', shownNeon === 'orange');
     localStorage.setItem('theme', theme);
     localStorage.setItem('theme-neon', neon);
-  }, [effectiveTheme, theme, neon]);
+  }, [effectiveTheme, theme, neon, shownNeon]);
 
   const toggleTheme = () => {
     // leaving dark (also from neon) goes to the light theme
@@ -69,7 +75,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const toggleNeon = () => setNeon((prev) => NEXT_NEON[prev]);
 
   return (
-    <ThemeContext.Provider value={{ theme: effectiveTheme, toggleTheme, neon, toggleNeon }}>
+    <ThemeContext.Provider value={{ theme: effectiveTheme, toggleTheme, neon, toggleNeon, setLoginScreen }}>
       {children}
     </ThemeContext.Provider>
   );

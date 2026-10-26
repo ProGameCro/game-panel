@@ -1,13 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Eye, EyeOff, Lock, User, AlertCircle } from 'lucide-react';
 import { apiClient } from '../utils/api';
 import { PanelLogo } from '../contexts/BrandingContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface LoginProps {
   onLogin: () => void;
 }
 
 export function Login({ onLogin }: LoginProps) {
+  // always in the Neon theme (orange when Neon is off), back to the saved theme after signing in
+  const { setLoginScreen } = useTheme();
+  useEffect(() => {
+    setLoginScreen(true);
+    return () => setLoginScreen(false);
+  }, [setLoginScreen]);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
