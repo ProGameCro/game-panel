@@ -29,6 +29,7 @@ Additions for CoD4 servers installed through LinuxGSM (Game Panel 1.6.0). Everyt
 | Server → **Settings → Game config → B3 (BigBrotherBot)** | Install / Start / Stop / Restart / Uninstall, console, `b3.xml` editor, logs. |
 | **Installing a new CoD4 server** | a **Slots** field; the game files come from your own folder `/opt/gamepanel/cod4-linux` (hard links: no extra disk space, ready in seconds) and **nothing is downloaded**, not even LinuxGSM from GitHub. The form checks the folder first and does not start the install while files are missing. |
 | `https://<panel domain>/pma/` | **phpMyAdmin** for the B3 database (MariaDB). |
+| `http://<server>:8080/cod4` | **FastDL** for mods and custom maps (`/var/www/html/cod4`), kept in sync with all CoD4 servers by itself. |
 | Sidebar → **✨** next to the light/dark button | **Neon** theme: animated aurora lights and grid, glass cards, neon edges and buttons (stops for reduced motion). Click again for the **orange** variant, once more to turn it off. |
 | User menu **⋮** → **Panel name** (admins) | Your own panel name instead of the *OVHcloud Game Panel* logo, for all users: sidebar, login page, mobile header, browser tab. *Use the logo* brings the logo back. |
 
@@ -36,7 +37,7 @@ Additions for CoD4 servers installed through LinuxGSM (Game Panel 1.6.0). Everyt
 
 ```bash
 cd ~
-for f in gp-cod4-cmdline.sh gp-b3.sh gp-cod4-linux.sh gp-pma.sh gp-db-root.sh gp-neon-theme.sh; do
+for f in gp-cod4-cmdline.sh gp-b3.sh gp-cod4-linux.sh gp-pma.sh gp-db-root.sh gp-neon-theme.sh gp-fastdl.sh; do
   curl -fsSLO https://raw.githubusercontent.com/ProGameCro/game-panel/main/cod4/install/$f
 done
 
@@ -45,6 +46,7 @@ bash gp-b3.sh                # 2. B3 card + B3 + MariaDB database
 bash gp-cod4-linux.sh 5      # 3. new CoD4 servers from /opt/gamepanel/cod4-linux (filled from server 5)
 bash gp-pma.sh               # 4. (optional) phpMyAdmin
 bash gp-neon-theme.sh        # 5. (optional) Neon theme (cyan / orange) and panel name
+bash gp-fastdl.sh            # 6. (optional) FastDL for mods and maps
 ```
 
 Then reload the panel in the browser with **Ctrl+Shift+R**. All scripts can be run again, and **after every panel update** run 1–3 again (`gp-cod4-linux.sh` without a number).
@@ -97,6 +99,23 @@ bash ~/gp-cod4-linux.sh --from https://github.com/<you>/<repo>/releases/tag/<tag
 ```
 
 `--from` also takes direct links to the parts (in order), e.g. from your own web server.
+
+### FastDL (`gp-fastdl.sh`)
+
+Players download mods and custom maps over HTTP, like on TCAdmin. The service `gamepanel-fastdl` copies the `.ff` and
+`.iwd` files from `mods/` and `usermaps/` of every CoD4 server (and `/opt/gamepanel/cod4-linux`) to `/var/www/html/cod4`
+and keeps them in sync every 10 seconds: new or changed files appear by themselves, deleted ones disappear. Configs and
+other files are never published. A small web server (nginx container `gamepanel-fastdl`) serves the folder on port 8080
+(`FASTDL_PORT=8090 bash gp-fastdl.sh` for another one), because the panel's port 80 always redirects to HTTPS.
+
+Then in each server's `server.cfg` (the script prints the exact URL):
+
+```
+set sv_allowDownload "1"
+set sv_wwwDownload "1"
+set sv_wwwBaseURL "http://<server IP>:8080/cod4"
+set sv_wwwDlDisconnected "0"
+```
 
 ### Troubleshooting
 

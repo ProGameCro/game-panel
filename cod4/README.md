@@ -11,6 +11,7 @@ installed through LinuxGSM. Everything was built and tested on **Ubuntu 24.04**.
   local image (`gamepanel-local/cod4`, built from `linuxgsm/`), so nothing is downloaded, not even LinuxGSM from GitHub.
   The install form checks the folder first and has a *Slots* field.
 - **phpMyAdmin** for the B3 database at `https://<panel domain>/pma/`.
+- **FastDL** for mods and maps: `/var/www/html/cod4` at `http://<server>:8080/cod4`, synced from all CoD4 servers by the service `gamepanel-fastdl`.
 - **Neon theme**: an animated theme (aurora lights, moving grid, glass cards) in cyan or orange, switched with the ✨ button in the sidebar.
 - **Panel name**: admins can replace the *OVHcloud Game Panel* logo with their own name (user menu ⋮ → Panel name).
 
@@ -28,6 +29,7 @@ bash gp-cod4-linux.sh --from <release page or links>   # after a reinstall: fill
 bash gp-pma.sh               # optional: phpMyAdmin at https://<panel domain>/pma/
 bash gp-db-root.sh           # only if the MariaDB root login does not work
 bash gp-neon-theme.sh        # optional: Neon theme and panel name
+bash gp-fastdl.sh            # optional: FastDL for mods and maps (port 8080)
 ```
 
 Then reload the panel (Ctrl+Shift+R) and open a CoD4 server > Settings > Game config.
