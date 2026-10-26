@@ -20,7 +20,8 @@ FILES = {
                 # users only see their own servers; the install form's owner
                 'src/utils/serverVisibility.ts', 'src/services/serverOwner.ts', 'src/routes/servers/read.ts',
                 'src/routes/servers/metrics.ts', 'src/routes/servers/install.ts', 'src/websocket/subscriptions.ts',
-                'src/websocket/broadcaster.ts', 'src/websocket/pollers/serverMetricsPoller.ts'],
+                'src/websocket/broadcaster.ts', 'src/websocket/pollers/serverMetricsPoller.ts',
+                'src/services/cod4/reinstall.ts'],
     'frontend': ['components/InstallGameServer.tsx', 'components/serverSettings/Cod4ModSection.tsx',
                  'components/UserAdministration.tsx', 'components/userAdministration/UsersPanel.tsx',
                  'components/NewsPanel.tsx', 'components/admin/AdminPage.tsx', 'components/admin/shared.tsx',
@@ -28,7 +29,8 @@ FILES = {
                  'components/admin/AdminB3.tsx', 'components/admin/AdminActivity.tsx', 'components/admin/AdminServerCfg.tsx',
                  'components/admin/AdminBackups.tsx', 'components/admin/AdminCod4Files.tsx', 'components/admin/AdminFtp.tsx',
                  'components/serverSettings/FtpSection.tsx', 'components/serverSettings/B3Section.tsx', 'components/OwnerPicker.tsx',
-                 'utils/adminApi.ts',
+                 'components/serverSettings/Cod4ReinstallSection.tsx', 'components/serverSettings/ServerSettingsModalLayout.tsx',
+                 'components/gameServersTable/useServerOwners.ts', 'utils/adminApi.ts',
                  'components/gameServersTable/GameIcon.tsx', 'components/gameServersTable/GameServerCard.tsx',
                  'components/gameServersTable/GameServersDesktopTable.tsx', 'index.html', 'public/favicon.svg',
                  # theme and panel name (formerly gp-neon-theme.sh)

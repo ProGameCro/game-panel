@@ -25,6 +25,7 @@ import { canOpenServerSettings, formatNetworkSpeed, formatPlayerCount, hasServer
 import { getServerStatusPresentation } from './utils';
 import { ODS_CHART_THEME } from '../charts/theme';
 import { GameIcon } from './GameIcon';
+import { ownerText, useServerOwners } from './useServerOwners';
 import { AppButton } from '../../src/ui/components';
 
 export type ConfirmServerAction = 'start' | 'stop' | 'restart' | 'delete';
@@ -101,6 +102,8 @@ export function GameServerCard({
   variant = 'list',
 }: GameServerCardProps) {
   const isGrid = variant === 'grid';
+  // Super Admins see who the server belongs to
+  const owners = useServerOwners(Boolean(currentUser?.isRoot));
   const [copied, setCopied] = useState(false);
   const copyConnection = async () => {
     try {
@@ -200,6 +203,7 @@ export function GameServerCard({
             </div>
           )}
           <p className={`text-sm ${TEXT_SECONDARY} mt-1 truncate`} title={getGameLabel(server)}>{getGameLabel(server)}</p>
+          {owners && <p className={`text-xs ${TEXT_TERTIARY} mt-0.5 truncate`}>Owner: {ownerText(owners, server.id)}</p>}
           <div className="mt-2">
             {server.port ? (
               <div className="flex items-center gap-1 -ml-2">

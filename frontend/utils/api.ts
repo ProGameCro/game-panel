@@ -230,6 +230,12 @@ class ApiClient {
     return response.data;
   }
 
+  // Call of Duty 4: game files made again from the cod4-linux folder (the server must be stopped)
+  async reinstallCod4(serverId: number, keepContent: boolean) {
+    const response = await this.client.post(`/api/cod4/reinstall/${serverId}`, { keepContent }, { timeout: 300000 });
+    return response.data as { linked: number; copied: number; kept: string[] };
+  }
+
   async getCod4FilesStatus() {
     const response = await this.client.get('/api/cod4/files');
     return response.data as Cod4FilesStatus;

@@ -112,6 +112,7 @@ echo '$(b $F/serverSettings/Cod4ModSection.tsx)' | base64 -d > "\$C/serverSettin
 echo '$(b $F/serverSettings/B3Section.tsx)' | base64 -d > "\$C/serverSettings/B3Section.tsx"
 # FTP access card (gp-ftp.sh), shown under the Command line card
 echo '$(b $F/serverSettings/FtpSection.tsx)' | base64 -d > "\$C/serverSettings/FtpSection.tsx"
+echo '$(b $F/serverSettings/Cod4ReinstallSection.tsx)' | base64 -d > "\$C/serverSettings/Cod4ReinstallSection.tsx"
 echo '$(b $GEN/patch_tab.py)' | base64 -d | python3 - "\$C/GameConfigTab.tsx"
 echo '$(b $GEN/patch_modal.py)' | base64 -d | python3 - "\$C/ServerSettingsModal.tsx"
 dc(){ docker compose --project-name gamepanel --env-file "\$DEPLOY/.env" -f "\$DEPLOY/compose.yml" "\$@"; }

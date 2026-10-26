@@ -122,6 +122,7 @@ export const adminApi = {
   ftpConnections: () => req<{ connections: FtpConnection[] }>('get', '/ftp/connections'),
   ftpKick: (connectionId: string) => req<{ success: boolean }>('delete', `/ftp/connections/${encodeURIComponent(connectionId)}`),
   ftpClose: (id: number) => req<{ success: boolean }>('delete', `/ftp/${id}`),
+  owners: () => req<{ owners: Record<number, string[]> }>('get', '/owners'),
   activity: (limit = 300) => req<{ entries: ActivityEntry[] }>('get', '/activity', undefined, { limit }),
 };
 

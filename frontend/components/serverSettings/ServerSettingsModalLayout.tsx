@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from 'react';
-import { X, FolderOpen, HardDrive, Settings, Terminal, Container, Clock } from 'lucide-react';
+import { X, FolderOpen, HardDrive, Settings, Container, Clock } from 'lucide-react';
 import { AppButton } from '../../src/ui/components';
 import { useBodyScrollLock } from '../../src/ui/utils/useBodyScrollLock';
 import { useFocusTrap } from '../../src/ui/utils/useFocusTrap';
@@ -55,7 +55,6 @@ export function ServerSettingsModalLayout({
   fileManagerContent,
   backupContent,
   gameConfigContent,
-  terminalContent,
   containerConfigContent,
 }: ServerSettingsModalLayoutProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -139,15 +138,6 @@ export function ServerSettingsModalLayout({
               )}
                 <AppButton
                   tone="ghost"
-                  onClick={() => openTab('terminal')}
-                  disabled={!canAccessTab('terminal')}
-                  className={`gp-settings-menu-btn flex items-center gap-2 px-3 py-2 rounded text-sm whitespace-nowrap ${tabButtonClass('terminal')}`}
-                >
-                  <Terminal className="w-4 h-4" />
-                  <span>Terminal</span>
-                </AppButton>
-                <AppButton
-                  tone="ghost"
                   onClick={() => openTab('containerconfig')}
                   disabled={!canAccessTab('containerconfig')}
                   className={`gp-settings-menu-btn flex items-center gap-2 px-3 py-2 rounded text-sm whitespace-nowrap ${tabButtonClass('containerconfig')}`}
@@ -204,15 +194,6 @@ export function ServerSettingsModalLayout({
               )}
                 <AppButton
                   tone="ghost"
-                  onClick={() => openTab('terminal')}
-                  disabled={!canAccessTab('terminal')}
-                  className={`gp-settings-menu-btn w-full flex items-center gap-3 px-4 py-3 rounded ${tabButtonClass('terminal')}`}
-                >
-                  <Terminal className="w-5 h-5" />
-                  <span className="font-medium">Terminal</span>
-                </AppButton>
-                <AppButton
-                  tone="ghost"
                   onClick={() => openTab('containerconfig')}
                   disabled={!canAccessTab('containerconfig')}
                   className={`gp-settings-menu-btn w-full flex items-center gap-3 px-4 py-3 rounded ${tabButtonClass('containerconfig')}`}
@@ -237,7 +218,7 @@ export function ServerSettingsModalLayout({
             {activeTab === 'filemanager' && canAccessTab('filemanager') && fileManagerContent}
             {activeTab === 'backup' && canAccessTab('backup') && backupContent}
             {activeTab === 'gameconfig' && canAccessTab('gameconfig') && gameConfigContent}
-            {activeTab === 'terminal' && canAccessTab('terminal') && terminalContent}
+            {/* no Terminal tab: a shell inside the game container is not offered in the panel */}
             {activeTab === 'containerconfig' && canAccessTab('containerconfig') && containerConfigContent}
             {activeTab === 'scheduledtasks' && canAccessTab('scheduledtasks') && scheduledTasksContent}
           </div>

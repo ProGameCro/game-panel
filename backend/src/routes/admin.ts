@@ -4,7 +4,7 @@ import path from 'node:path';
 import { Router, type Response } from 'express';
 import { authMiddleware, rootOnly, type AuthenticatedRequest } from '../middleware/auth.js';
 import { getConfig } from '../config.js';
-import { serverRepository } from '../database/index.js';
+import { serverMemberRepository, serverRepository } from '../database/index.js';
 import { docker } from '../utils/docker/client.js';
 import { getServerStoragePaths } from '../utils/storage.js';
 import type { GameServerRow } from '../types/gameServer.js';
@@ -1157,6 +1157,20 @@ router.delete('/ftp/:id', async (req: AuthenticatedRequest, res: Response) => {
         return res.json({ success: true });
     } catch (error) {
         return fail(res, error, 'Could not close the FTP account');
+    }
+});
+
+// ---- who each server belongs to (the Game Servers list shows it to Super Admins)
+router.get('/owners', async (_req: AuthenticatedRequest, res: Response) => {
+    try {
+        const owners: Record<number, string[]> = {};
+        for (const server of await serverRepository.listAll()) {
+            const members = (await serverMemberRepository.listByServer(server.id)) as Array<{ username: string }>;
+            owners[server.id] = members.map((m) => m.username);
+        }
+        return res.json({ owners });
+    } catch (error) {
+        return fail(res, error, 'Could not read the owners');
     }
 });
 

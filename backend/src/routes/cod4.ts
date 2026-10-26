@@ -9,6 +9,8 @@ import { docker } from '../utils/docker/client.js';
 import { getServerStoragePaths } from '../utils/storage.js';
 import { parsePositiveIntId } from '../utils/ids.js';
 import { readAdminSettings } from '../services/cod4/settings.js';
+import { reinstallCod4Server } from '../services/cod4/reinstall.js';
+import { serverRepository, actionsRepository } from '../database/index.js';
 
 // Call of Duty 4: are the game files (cod4-linux folder) and the local image ready? Shown in the install form.
 const router = Router();
@@ -113,6 +115,28 @@ router.post(
             return res.status(504).json({ error: 'The FastDL service did not answer (systemctl status gamepanel-fastdl)' });
         } catch (error) {
             return res.status(500).json({ error: error instanceof Error ? error.message : 'Could not start the FastDL sync' });
+        }
+    }
+);
+
+// Reinstall: the game files made again from the cod4-linux folder (the server must be stopped). { keepContent: true }
+// keeps the mods and custom maps. Owners of a server may do it (soft wipe permission).
+router.post(
+    '/reinstall/:id',
+    authMiddleware,
+    requireServerPermission(PERMISSIONS.server.wipe.soft),
+    async (req: AuthenticatedRequest, res: Response) => {
+        try {
+            const serverId = parsePositiveIntId(req.params.id);
+            const server = serverId ? await serverRepository.findById(serverId) : null;
+            if (!server) return res.status(404).json({ error: 'Server not found' });
+            const keepContent = req.body?.keepContent !== false;
+            const result = await reinstallCod4Server(server, keepContent);
+            await actionsRepository.create(server.id, 'success', `Game files reinstalled${keepContent ? ' (mods and maps kept)' : ''}`, req.user?.username || '');
+            return res.json(result);
+        } catch (error) {
+            const statusCode = Number((error as { statusCode?: number })?.statusCode) || 500;
+            return res.status(statusCode).json({ error: error instanceof Error ? error.message : 'Reinstall failed' });
         }
     }
 );

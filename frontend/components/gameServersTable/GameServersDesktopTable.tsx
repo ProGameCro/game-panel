@@ -41,6 +41,7 @@ import {
   hasServerPermission,
 } from './utils';
 import { GameIcon } from './GameIcon';
+import { ownerText, useServerOwners } from './useServerOwners';
 import { ODS_CHART_THEME } from '../charts/theme';
 
 interface ConfirmActionState {
@@ -140,6 +141,8 @@ export function GameServersDesktopTable({
   sortOrder,
   handleSort,
 }: GameServersDesktopTableProps) {
+  // Super Admins see who each server belongs to
+  const owners = useServerOwners(Boolean(currentUser?.isRoot));
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
@@ -224,6 +227,7 @@ export function GameServersDesktopTable({
                 {getSortIcon(sortField, sortOrder, 'game')}
               </AppButton>
             </th>
+            {owners && <th className={`text-left ${textTertiary} text-xs font-semibold uppercase tracking-wider py-3 px-4`}>Owner</th>}
             <th className={`text-left ${textTertiary} text-xs font-semibold uppercase tracking-wider py-3 px-4`}>Connection</th>
             <th
               aria-sort={sortField === 'status' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
@@ -310,7 +314,7 @@ export function GameServersDesktopTable({
         <tbody>
           {filteredAndSortedServers.length === 0 && (
             <tr>
-              <td colSpan={showPlayers ? 9 : 8} className="py-12 text-center">
+              <td colSpan={(showPlayers ? 9 : 8) + (owners ? 1 : 0)} className="py-12 text-center">
                 <p className={`text-sm ${textTertiary}`}>No game servers yet.</p>
                 <p className={`mt-1 text-xs ${textTertiary}`}>
                   Use “Add Game Server” below to install your first one.
@@ -405,6 +409,7 @@ export function GameServersDesktopTable({
                   )}
                 </td>
                 <td className={`${textSecondary} py-4 px-4`}>{getGameLabel(server)}</td>
+                {owners && <td className={`${textSecondary} py-4 px-4 text-sm`}>{ownerText(owners, server.id)}</td>}
                 <td className="py-4 px-4">
                   {server.port ? (
                     <div className="flex items-center gap-2 group">

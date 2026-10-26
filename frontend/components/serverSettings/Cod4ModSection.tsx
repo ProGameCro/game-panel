@@ -4,6 +4,7 @@ import { apiClient } from '../../utils/api';
 import { AppButton, AppInput, AppSelect } from '../../src/ui/components';
 import { RestartToApplyNote } from './RestartToApplyNote';
 import { FtpSection } from './FtpSection';
+import { Cod4ReinstallSection } from './Cod4ReinstallSection';
 
 // Call of Duty 4 (LinuxGSM cod4server) command line, edited like on CoD4X hosting panels:
 // +set sv_authtoken, r_xassetnum (materials / xanims / xmodels), +set fs_game and rcon_password.
@@ -663,6 +664,16 @@ export function Cod4ModSection({
       textPrimary={textPrimary}
       textSecondary={textSecondary}
     />
+    {canWriteFileManager && (
+      <Cod4ReinstallSection
+        serverId={serverId}
+        serverStatus={serverStatus}
+        borderColor={borderColor}
+        contentBg={contentBg}
+        textPrimary={textPrimary}
+        textSecondary={textSecondary}
+      />
+    )}
     </>
   );
 }

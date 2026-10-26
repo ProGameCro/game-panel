@@ -273,6 +273,24 @@ export function cod4MaxPlayers(env: string[] | undefined): number | null {
     return /^\d+$/.test(raw) && value >= 1 && value <= 64 ? value : null;
 }
 
+
+// the game files of a new server, or of a reinstalled one (server Settings > Game config > Reinstall): linked from the
+// cod4-linux folder, the starting server.cfg (Admin > CoD4 files) and the server's name in it
+export async function prepareCod4ServerFiles(dataDir: string, gameServerName: string, serverName?: string | null): Promise<LinkCount | null> {
+    // checked again here: the folder may have changed since the install was requested
+    await assertCod4FilesReady();
+    const count = await linkCod4Files(dataDir);
+    const { cod4Defaults } = await readAdminSettings();
+    if (cod4Defaults.serverCfg.trim()) {
+        const cfg = path.join(dataDir, 'serverfiles', 'main', `${path.basename(gameServerName)}.cfg`);
+        await fs.mkdir(path.dirname(cfg), { recursive: true });
+        await fs.rm(cfg, { force: true });
+        await fs.writeFile(cfg, cod4Defaults.serverCfg.endsWith('\n') ? cod4Defaults.serverCfg : `${cod4Defaults.serverCfg}\n`, 'utf8');
+    }
+    await ensureServerConfig(dataDir, gameServerName);
+    if (serverName) await setCod4Hostname(dataDir, gameServerName, serverName);
+    return count;
+}
 export const cod4Adapter: GameAdapter = {
     async beforeContainerCreate(ctx: BeforeContainerCreateContext): Promise<void> {
         await runGenericBeforeContainerCreate(ctx);
@@ -283,19 +301,8 @@ export const cod4Adapter: GameAdapter = {
                 { fileName: `${ctx.gameServerName}.cfg`, values: { maxplayers: String(slots) } },
             ]);
         }
-        // checked again here: the folder may have changed since the install was requested
-        await assertCod4FilesReady();
-        const count = await linkCod4Files(ctx.dataDir);
-        // Admin page > CoD4 files > Defaults for new servers
+        const count = await prepareCod4ServerFiles(ctx.dataDir, ctx.gameServerName, ctx.serverName);
         const { cod4Defaults } = await readAdminSettings();
-        if (cod4Defaults.serverCfg.trim()) {
-            const cfg = path.join(ctx.dataDir, 'serverfiles', 'main', `${path.basename(ctx.gameServerName)}.cfg`);
-            await fs.mkdir(path.dirname(cfg), { recursive: true });
-            await fs.rm(cfg, { force: true });
-            await fs.writeFile(cfg, cod4Defaults.serverCfg.endsWith('\n') ? cod4Defaults.serverCfg : `${cod4Defaults.serverCfg}\n`, 'utf8');
-        }
-        await ensureServerConfig(ctx.dataDir, ctx.gameServerName);
-        if (ctx.serverName) await setCod4Hostname(ctx.dataDir, ctx.gameServerName, ctx.serverName);
         const mod = cod4Defaults.mod && (await fs.stat(path.join(ctx.dataDir, 'serverfiles', 'mods', cod4Defaults.mod)).catch(() => null))?.isDirectory()
             ? cod4Defaults.mod
             : '';
