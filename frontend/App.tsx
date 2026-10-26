@@ -453,7 +453,10 @@ function AppContent() {
     if (activeTab === 'admin-users' && !canManageUsers) {
       setActiveTab('game-servers');
     }
-  }, [activeTab, canManageUsers]);
+    if (activeTab === 'admin' && currentUser && !currentUser.isRoot) {
+      setActiveTab('game-servers');
+    }
+  }, [activeTab, canManageUsers, currentUser]);
 
   const handleLogin = () => {
     if (window.location.pathname !== '/') {

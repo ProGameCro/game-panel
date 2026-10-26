@@ -11,10 +11,15 @@ FILES = {
     'backend': ['src/providers/linuxgsm/adapters/cod4/index.ts', 'src/providers/linuxgsm/adapters/registry.ts',
                 'src/providers/linuxgsm/adapters/types.ts', 'src/providers/linuxgsm/installSpec.ts',
                 'src/services/servers.ts', 'src/routes/cod4.ts', 'src/providers/installTypes.ts',
-                'src/routes/users.ts', 'src/database/repositories/userRepository.ts', 'src/routes/news.ts'],
+                'src/routes/users.ts', 'src/database/repositories/userRepository.ts', 'src/routes/news.ts',
+                # theme and panel name (formerly gp-neon-theme.sh), Admin page
+                'src/routes/branding.ts', 'src/routes/admin.ts'],
     'frontend': ['components/InstallGameServer.tsx', 'components/serverSettings/Cod4ModSection.tsx',
                  'components/UserAdministration.tsx', 'components/userAdministration/UsersPanel.tsx',
-                 'components/NewsPanel.tsx'],
+                 'components/NewsPanel.tsx', 'components/admin/AdminPage.tsx',
+                 # theme and panel name (formerly gp-neon-theme.sh)
+                 'main.tsx', 'App.tsx', 'components/Sidebar.tsx', 'components/Login.tsx', 'components/app/AppShell.tsx',
+                 'contexts/ThemeContext.tsx', 'contexts/BrandingContext.tsx', 'src/ui/theme/neon.css'],
 }
 
 def git(*args):

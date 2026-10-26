@@ -98,7 +98,7 @@ const fromDateInput = (value: string): number => {
 };
 
 // Editor for the panel's own news (Super Admins). Saves the whole list at once.
-function NewsEditor({ items, onClose, onSaved }: { items: CatalogNewsItem[]; onClose: () => void; onSaved: (news: CatalogNewsItem[]) => void }) {
+export function NewsEditor({ items, onClose, onSaved }: { items: CatalogNewsItem[]; onClose: () => void; onSaved: (news: CatalogNewsItem[]) => void }) {
   const [drafts, setDrafts] = useState<NewsDraft[]>(() =>
     items.map((n) => ({ title: n.title, description: n.description, iconKey: normalizeNewsIconKey(n.iconKey), date: toDateInput(n.date) }))
   );

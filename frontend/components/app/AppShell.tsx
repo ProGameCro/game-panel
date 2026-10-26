@@ -5,6 +5,7 @@ import { useFocusTrap } from '../../src/ui/utils/useFocusTrap';
 import { Sidebar } from '../Sidebar';
 import { GameServersTable } from '../GameServersTable';
 import { NewsPanel } from '../NewsPanel';
+import { AdminPage } from '../admin/AdminPage';
 import { InstallGameServer } from '../InstallGameServer';
 import { Resources } from '../Resources';
 import { UserAdministration } from '../UserAdministration';
@@ -334,6 +335,18 @@ export function AppShell({
         {activeTab === 'resources' && (
           <AppPageLayout className={pageShellClassName}>
             <Resources />
+          </AppPageLayout>
+        )}
+
+        {activeTab === 'admin' && currentUser?.isRoot && (
+          <AppPageLayout className={pageShellClassName}>
+            <AdminPage
+              gameServers={gameServers}
+              serversPlayersById={serversPlayersById}
+              gameNamesByKey={gameNamesByKey}
+              handleServerAction={handleServerAction}
+              setActiveTab={setActiveTab}
+            />
           </AppPageLayout>
         )}
 

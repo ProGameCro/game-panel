@@ -207,6 +207,17 @@ class ApiClient {
     return response.data as { total: number; added: number; removed: number };
   }
 
+  // Admin page (Super Admins): add-ons, host and alerts; sizes=true also counts the folder sizes (slower)
+  async getAdminOverview(sizes = false) {
+    const response = await this.client.get('/api/admin/overview', { params: sizes ? { sizes: 1 } : {} });
+    return response.data as import('./api/types').AdminOverview;
+  }
+
+  async syncAllFastDl() {
+    const response = await this.client.post('/api/admin/fastdl/sync');
+    return response.data as { total: number; added: number; removed: number };
+  }
+
   async getCod4FilesStatus() {
     const response = await this.client.get('/api/cod4/files');
     return response.data as Cod4FilesStatus;

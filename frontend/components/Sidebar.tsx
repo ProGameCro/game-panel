@@ -253,6 +253,8 @@ export function Sidebar({
     { id: 'host-status', label: 'Host Status', iconName: 'analysis' },
     { id: 'admin-users', label: 'User Administration', iconName: 'user', disabled: !canManageUsers },
     { id: 'resources', label: 'Resources', iconName: 'book' },
+    // Admin page: Super Admins only
+    ...(currentUser?.isRoot ? [{ id: 'admin', label: 'Admin', iconName: 'shield-check' as IconName }] : []),
   ];
 
   return (

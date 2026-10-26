@@ -30,6 +30,7 @@ Additions for CoD4 servers installed through LinuxGSM (Game Panel 1.6.0). Everyt
 | **Installing a new CoD4 server** | a **Slots** field; the game files come from your own folder `/opt/gamepanel/cod4-linux` (hard links: no extra disk space, ready in seconds) and **nothing is downloaded**, not even LinuxGSM from GitHub. The form checks the folder first and does not start the install while files are missing. |
 | `https://<panel domain>/pma/` | **phpMyAdmin** for the B3 database (MariaDB). |
 | `http://<panel domain>:8080/cod4/<server>` | **FastDL** for mods and custom maps: every server its own folder and link by server number (`/var/www/html/cod4/<server>`), kept in sync by itself; on for new servers, on/off in the Command line card. |
+| Sidebar → **Admin** (Super Admins) | Every server at a glance (status, players, CPU, RAM, B3, FastDL) with **group Start / Stop / Restart**, what needs attention (server down, B3 stopped, disk full, FastDL stopped), FastDL with **Sync all**, host (load, memory, disk, folder sizes, containers) and the panel's settings (name, news, users). |
 | Sidebar → **✨** next to the light/dark button | **Neon** theme: animated aurora lights and grid, glass cards, neon edges and buttons (stops for reduced motion). Click again for the **orange** variant, once more to turn it off. |
 | User menu **⋮** → **Panel name** (admins) | Your own panel name instead of the *OVHcloud Game Panel* logo, for all users: sidebar, login page, mobile header, browser tab. *Use the logo* brings the logo back. |
 
@@ -37,15 +38,14 @@ Additions for CoD4 servers installed through LinuxGSM (Game Panel 1.6.0). Everyt
 
 ```bash
 cd ~
-for f in gp-cod4-cmdline.sh gp-b3.sh gp-cod4-linux.sh gp-pma.sh gp-db-root.sh gp-neon-theme.sh gp-fastdl.sh; do
+for f in gp-cod4-cmdline.sh gp-b3.sh gp-cod4-linux.sh gp-pma.sh gp-db-root.sh gp-fastdl.sh; do
   curl -fsSLO https://raw.githubusercontent.com/ProGameCro/game-panel/main/cod4/install/$f
 done
 
 bash gp-cod4-cmdline.sh      # 1. Command line card
 bash gp-b3.sh                # 2. B3 card + B3 + MariaDB database
-bash gp-cod4-linux.sh 5      # 3. new CoD4 servers from /opt/gamepanel/cod4-linux (filled from server 5)
+bash gp-cod4-linux.sh 5      # 3. the panel: CoD4 from /opt/gamepanel/cod4-linux (filled from server 5), Admin page, theme, news, …
 bash gp-pma.sh               # 4. (optional) phpMyAdmin
-bash gp-neon-theme.sh        # 5. (optional) Neon theme (cyan / orange) and panel name
 bash gp-fastdl.sh            # 6. (optional) FastDL for mods and maps
 ```
 
