@@ -35,8 +35,8 @@ export type Cod4CommandLine = { mod: string; auth: boolean; assets: Assets; cust
 const MOD_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const TOKEN_PATTERN = /^[A-Za-z0-9._-]{8,128}$/;
 // no spaces, quotes, $ or shell characters: the value is expanded unquoted by LinuxGSM
-// CoD4 wants a simple RCON password: letters and numbers only, at least 8
-const PASSWORD_PATTERN = /^[A-Za-z0-9]{8,32}$/;
+// CoD4 wants a simple RCON password: letters and numbers only, at most 8 (a longer one gives "Bad rcon")
+const PASSWORD_PATTERN = /^[A-Za-z0-9]{1,8}$/;
 // no look-alike characters (0/O, 1/l/I), so the password is easy to type in the game console
 const PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
 const ASSET_LIMIT = 65535;
@@ -110,10 +110,14 @@ export const buildCommandLine = (parameters: string, wanted: Cod4CommandLine): s
 export const modFromStartParameters = (parameters: string): string => parseCommandLine(parameters).mod;
 export const withMod = (parameters: string, mod: string): string => buildCommandLine(parameters, { ...parseCommandLine(parameters), mod });
 
+// 8 characters with at least one small letter, one capital and one number
 const generatePassword = (): string => {
   const bytes = new Uint32Array(8);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (n) => PASSWORD_CHARS[n % PASSWORD_CHARS.length]).join('');
+  for (;;) {
+    crypto.getRandomValues(bytes);
+    const password = Array.from(bytes, (n) => PASSWORD_CHARS[n % PASSWORD_CHARS.length]).join('');
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password) && /[0-9]/.test(password)) return password;
+  }
 };
 
 export const readOptional = async (serverId: number, path: string): Promise<string | null> => {
@@ -454,7 +458,7 @@ export function Cod4ModSection({
                   setRcon(v.trim());
                   setSaved(false);
                 }}
-                placeholder="8–32 letters and numbers"
+                placeholder="up to 8 letters and numbers"
                 disabled={disabled}
               />
             </div>
@@ -474,7 +478,7 @@ export function Cod4ModSection({
             )}
           </div>
           <span className={hint}>Set after server.cfg (+rcon_password at the end of the command line), so it counts even if server.cfg has its own rcon_password.</span>
-          {problems.rcon && <span className={bad}>8–32 characters, letters and numbers only (no special characters).</span>}
+          {problems.rcon && <span className={bad}>Up to 8 characters: small and capital letters and numbers only (no special characters).</span>}
         </div>
 
       </div>
