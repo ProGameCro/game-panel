@@ -80,6 +80,23 @@ is the starting config of new servers.
   GitHub). After `docker pull gameservermanagers/gameserver:cod4`, run the script again to rebuild it.
 - Servers installed before keep running as they are.
 
+**Keeping the folder for a reinstall.** The CoD4 game files (`main/*.iwd`, `zone/*.ff`) belong to Activision: keep them
+in a **private** repository or on your own server, never in a public one.
+
+```bash
+bash ~/gp-cod4-linux.sh --pack     # /root/cod4-linux.tar.part-00, -01 ... (max 1.9 GB each)
+```
+
+Upload the parts to a release of a private GitHub repository (Releases → Draft a new release → drop the files →
+Publish). After reinstalling the server and the panel:
+
+```bash
+export GH_TOKEN=<GitHub token with read access to that repository>
+bash ~/gp-cod4-linux.sh --from https://github.com/<you>/<repo>/releases/tag/<tag>
+```
+
+`--from` also takes direct links to the parts (in order), e.g. from your own web server.
+
 ### Troubleshooting
 
 | Problem | Fix |

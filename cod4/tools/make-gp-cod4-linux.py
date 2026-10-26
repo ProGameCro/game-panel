@@ -65,6 +65,32 @@ dockerfile = b64(read('cod4/linuxgsm/Dockerfile'))
 gamedig = b64(read('cod4/linuxgsm/check_gamedig.sh'))
 
 # same rule as the panel (adapters/cod4/index.ts): big files are hard links, small files and executables copies
+# --from: turns the given links into download URLs ("github <api url>" or "url <url>"), GitHub release pages included
+resolve_py = b64(b'''import json, os, re, sys, urllib.request
+token = os.environ.get('GH_TOKEN', '')
+base = os.environ.get('GP_GITHUB_API', 'https://api.github.com')
+def api(url):
+    req = urllib.request.Request(url, headers={'Accept': 'application/vnd.github+json'})
+    if token:
+        req.add_header('Authorization', 'Bearer ' + token)
+    try:
+        return json.load(urllib.request.urlopen(req, timeout=30))
+    except Exception as e:
+        sys.exit('GitHub: %s (%s). For a private repository: export GH_TOKEN=<token>' % (url, e))
+for link in sys.argv[1:]:
+    m = re.match(r'https://github\\.com/([^/]+)/([^/]+)/releases/(tag|download)/([^/]+)(?:/(.+))?$', link)
+    if not m:
+        print('url ' + link); continue
+    owner, repo, kind, tag, name = m.groups()
+    assets = api('%s/repos/%s/%s/releases/tags/%s' % (base, owner, repo, tag)).get('assets', [])
+    if kind == 'download':
+        assets = [a for a in assets if a['name'] == name]
+    else:
+        assets = sorted((a for a in assets if a['name'].startswith('cod4-linux.tar.part-')), key=lambda a: a['name'])
+    for a in assets:
+        print('github ' + a['url'])
+''')
+
 link_py = b64(b'''import os, shutil, sys
 src, dst = sys.argv[1], sys.argv[2]
 linked = copied = 0
@@ -99,6 +125,12 @@ script = r'''#!/usr/bin/env bash
 # Usage (as root):
 #   bash gp-cod4-linux.sh        set up / update the panel, the image and the folder, then show what is in it
 #   bash gp-cod4-linux.sh 5      fill /opt/gamepanel/cod4-linux with the files of server 5 (replaces what is there)
+#   bash gp-cod4-linux.sh --pack [folder]       pack /opt/gamepanel/cod4-linux into parts of max 1.9 GB (default /root),
+#                                               to keep them somewhere (a PRIVATE GitHub repo's release, your web server)
+#   bash gp-cod4-linux.sh --from <link> [...]   fill the folder from those parts (replaces what is there):
+#        a GitHub release page (https://github.com/<you>/<repo>/releases/tag/<tag>: all cod4-linux.tar.part-* files),
+#        or the links of the parts in order. For a private GitHub repo first: export GH_TOKEN=<token with read access>
+#   The CoD4 game files (main/*.iwd, zone/*.ff) are Activision's: never put them in a public repository.
 # Safe to run again (also after a panel update, which removes the panel part).
 set -euo pipefail
 APP_ROOT="${GP_APP_ROOT:-/opt/gamepanel}"
@@ -137,7 +169,39 @@ fi
 rm -rf "$OLD_TPL"; rmdir "$APP_ROOT/data/templates" 2>/dev/null || true
 [[ -L $LINK ]] || ln -s "$FILES" "$LINK"
 
-if [[ -n ${1:-} ]]; then
+if [[ ${1:-} == --pack ]]; then
+  out="${2:-/root}"; mkdir -p "$out"
+  nonempty "$FILES" || { echo "$LINK je prazan, nema što pakirati"; exit 1; }
+  rm -f "$out"/cod4-linux.tar.part-*
+  echo "== Pakiram $LINK ($(du -sh "$FILES/" | cut -f1)) u $out ..."
+  # no compression: .iwd and .ff files are compressed already
+  tar -C "$APP_ROOT/data" --exclude='*.log' -cf - cod4-linux | split -b 1900M -d -a 2 - "$out/cod4-linux.tar.part-"
+  ls -lh "$out"/cod4-linux.tar.part-* | awk '{print "   " $5 "  " $9}'
+  echo
+  echo "Spremi te datoteke negdje sigurno, npr. u release PRIVATNOG GitHub repozitorija (github.com/new -> Private,"
+  echo "pa Releases -> Draft a new release -> povuci datoteke -> Publish). Ne u javni repo: datoteke igre su Activisionove."
+  echo "Nakon reinstalacije:  export GH_TOKEN=<token>;  bash $0 --from https://github.com/<ti>/<repo>/releases/tag/<tag>"
+  exit 0
+fi
+
+if [[ ${1:-} == --from ]]; then
+  shift
+  (($#)) || { echo "Upotreba: bash $0 --from <link> [link ...]"; exit 1; }
+  list="$(echo '__RESOLVE_PY__' | base64 -d | python3 - "$@")"
+  [[ -n $list ]] || { echo "Na tom linku nema cod4-linux.tar.part-* datoteka"; exit 1; }
+  echo "== Preuzimam $(wc -l <<<"$list") dio(va) i raspakiravam u $LINK ..."
+  rm -rf "$FILES.new" "$FILES.old"; mkdir -p "$FILES.new"
+  while read -r kind url; do
+    if [[ $kind == github ]]; then
+      curl -fsSL --retry 3 -H 'Accept: application/octet-stream' ${GH_TOKEN:+-H "Authorization: Bearer $GH_TOKEN"} "$url"
+    else
+      curl -fsSL --retry 3 "$url"
+    fi
+  done <<<"$list" | tar -x -C "$FILES.new"
+  [[ -f $FILES.new/cod4-linux/cod4x18_dedrun ]] || { rm -rf "$FILES.new"; echo "Preuzeta arhiva nema cod4-linux/cod4x18_dedrun"; exit 1; }
+  chmod -R a+rX "$FILES.new"
+  mv "$FILES" "$FILES.old"; mv "$FILES.new/cod4-linux" "$FILES"; rm -rf "$FILES.new" "$FILES.old"
+elif [[ -n ${1:-} ]]; then
   k="$1"
   [[ $k =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Neispravan broj servera: $k"; exit 1; }
   src="$APP_ROOT/servers/$k/data/serverfiles"
@@ -228,7 +292,7 @@ else
 fi
 echo "Postojeći serveri rade kao i prije. Nakon nadogradnje Game Panela ponovno pokreni: sudo bash $0"
 '''
-for key, value in {'__LINK_PY__': link_py, '__DOCKERFILE__': dockerfile, '__GAMEDIG__': gamedig,
+for key, value in {'__LINK_PY__': link_py, '__RESOLVE_PY__': resolve_py, '__DOCKERFILE__': dockerfile, '__GAMEDIG__': gamedig,
                    '__REPLACE_PY__': replace_py, '__PATCH_PY__': patch_py}.items():
     script = script.replace(key, value)
 open(OUT, 'w').write(script)

@@ -23,6 +23,8 @@ bash gp-cod4-cmdline.sh      # Command line card
 bash gp-b3.sh                # B3 card, B3 image, B3 service, MariaDB
 bash gp-cod4-linux.sh        # new CoD4 servers from /opt/gamepanel/cod4-linux, local image, Slots
 bash gp-cod4-linux.sh 5      # optional: fill /opt/gamepanel/cod4-linux with server 5's files
+bash gp-cod4-linux.sh --pack # optional: pack the folder (parts of max 1.9 GB) to keep it in a PRIVATE place
+bash gp-cod4-linux.sh --from <release page or links>   # after a reinstall: fill the folder from those parts
 bash gp-pma.sh               # optional: phpMyAdmin at https://<panel domain>/pma/
 bash gp-db-root.sh           # only if the MariaDB root login does not work
 bash gp-neon-theme.sh        # optional: Neon theme and panel name

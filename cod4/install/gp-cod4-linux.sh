@@ -7,6 +7,12 @@
 # Usage (as root):
 #   bash gp-cod4-linux.sh        set up / update the panel, the image and the folder, then show what is in it
 #   bash gp-cod4-linux.sh 5      fill /opt/gamepanel/cod4-linux with the files of server 5 (replaces what is there)
+#   bash gp-cod4-linux.sh --pack [folder]       pack /opt/gamepanel/cod4-linux into parts of max 1.9 GB (default /root),
+#                                               to keep them somewhere (a PRIVATE GitHub repo's release, your web server)
+#   bash gp-cod4-linux.sh --from <link> [...]   fill the folder from those parts (replaces what is there):
+#        a GitHub release page (https://github.com/<you>/<repo>/releases/tag/<tag>: all cod4-linux.tar.part-* files),
+#        or the links of the parts in order. For a private GitHub repo first: export GH_TOKEN=<token with read access>
+#   The CoD4 game files (main/*.iwd, zone/*.ff) are Activision's: never put them in a public repository.
 # Safe to run again (also after a panel update, which removes the panel part).
 set -euo pipefail
 APP_ROOT="${GP_APP_ROOT:-/opt/gamepanel}"
@@ -45,7 +51,39 @@ fi
 rm -rf "$OLD_TPL"; rmdir "$APP_ROOT/data/templates" 2>/dev/null || true
 [[ -L $LINK ]] || ln -s "$FILES" "$LINK"
 
-if [[ -n ${1:-} ]]; then
+if [[ ${1:-} == --pack ]]; then
+  out="${2:-/root}"; mkdir -p "$out"
+  nonempty "$FILES" || { echo "$LINK je prazan, nema što pakirati"; exit 1; }
+  rm -f "$out"/cod4-linux.tar.part-*
+  echo "== Pakiram $LINK ($(du -sh "$FILES/" | cut -f1)) u $out ..."
+  # no compression: .iwd and .ff files are compressed already
+  tar -C "$APP_ROOT/data" --exclude='*.log' -cf - cod4-linux | split -b 1900M -d -a 2 - "$out/cod4-linux.tar.part-"
+  ls -lh "$out"/cod4-linux.tar.part-* | awk '{print "   " $5 "  " $9}'
+  echo
+  echo "Spremi te datoteke negdje sigurno, npr. u release PRIVATNOG GitHub repozitorija (github.com/new -> Private,"
+  echo "pa Releases -> Draft a new release -> povuci datoteke -> Publish). Ne u javni repo: datoteke igre su Activisionove."
+  echo "Nakon reinstalacije:  export GH_TOKEN=<token>;  bash $0 --from https://github.com/<ti>/<repo>/releases/tag/<tag>"
+  exit 0
+fi
+
+if [[ ${1:-} == --from ]]; then
+  shift
+  (($#)) || { echo "Upotreba: bash $0 --from <link> [link ...]"; exit 1; }
+  list="$(echo 'aW1wb3J0IGpzb24sIG9zLCByZSwgc3lzLCB1cmxsaWIucmVxdWVzdAp0b2tlbiA9IG9zLmVudmlyb24uZ2V0KCdHSF9UT0tFTicsICcnKQpiYXNlID0gb3MuZW52aXJvbi5nZXQoJ0dQX0dJVEhVQl9BUEknLCAnaHR0cHM6Ly9hcGkuZ2l0aHViLmNvbScpCmRlZiBhcGkodXJsKToKICAgIHJlcSA9IHVybGxpYi5yZXF1ZXN0LlJlcXVlc3QodXJsLCBoZWFkZXJzPXsnQWNjZXB0JzogJ2FwcGxpY2F0aW9uL3ZuZC5naXRodWIranNvbid9KQogICAgaWYgdG9rZW46CiAgICAgICAgcmVxLmFkZF9oZWFkZXIoJ0F1dGhvcml6YXRpb24nLCAnQmVhcmVyICcgKyB0b2tlbikKICAgIHRyeToKICAgICAgICByZXR1cm4ganNvbi5sb2FkKHVybGxpYi5yZXF1ZXN0LnVybG9wZW4ocmVxLCB0aW1lb3V0PTMwKSkKICAgIGV4Y2VwdCBFeGNlcHRpb24gYXMgZToKICAgICAgICBzeXMuZXhpdCgnR2l0SHViOiAlcyAoJXMpLiBGb3IgYSBwcml2YXRlIHJlcG9zaXRvcnk6IGV4cG9ydCBHSF9UT0tFTj08dG9rZW4+JyAlICh1cmwsIGUpKQpmb3IgbGluayBpbiBzeXMuYXJndlsxOl06CiAgICBtID0gcmUubWF0Y2gocidodHRwczovL2dpdGh1YlwuY29tLyhbXi9dKykvKFteL10rKS9yZWxlYXNlcy8odGFnfGRvd25sb2FkKS8oW14vXSspKD86LyguKykpPyQnLCBsaW5rKQogICAgaWYgbm90IG06CiAgICAgICAgcHJpbnQoJ3VybCAnICsgbGluayk7IGNvbnRpbnVlCiAgICBvd25lciwgcmVwbywga2luZCwgdGFnLCBuYW1lID0gbS5ncm91cHMoKQogICAgYXNzZXRzID0gYXBpKCclcy9yZXBvcy8lcy8lcy9yZWxlYXNlcy90YWdzLyVzJyAlIChiYXNlLCBvd25lciwgcmVwbywgdGFnKSkuZ2V0KCdhc3NldHMnLCBbXSkKICAgIGlmIGtpbmQgPT0gJ2Rvd25sb2FkJzoKICAgICAgICBhc3NldHMgPSBbYSBmb3IgYSBpbiBhc3NldHMgaWYgYVsnbmFtZSddID09IG5hbWVdCiAgICBlbHNlOgogICAgICAgIGFzc2V0cyA9IHNvcnRlZCgoYSBmb3IgYSBpbiBhc3NldHMgaWYgYVsnbmFtZSddLnN0YXJ0c3dpdGgoJ2NvZDQtbGludXgudGFyLnBhcnQtJykpLCBrZXk9bGFtYmRhIGE6IGFbJ25hbWUnXSkKICAgIGZvciBhIGluIGFzc2V0czoKICAgICAgICBwcmludCgnZ2l0aHViICcgKyBhWyd1cmwnXSkK' | base64 -d | python3 - "$@")"
+  [[ -n $list ]] || { echo "Na tom linku nema cod4-linux.tar.part-* datoteka"; exit 1; }
+  echo "== Preuzimam $(wc -l <<<"$list") dio(va) i raspakiravam u $LINK ..."
+  rm -rf "$FILES.new" "$FILES.old"; mkdir -p "$FILES.new"
+  while read -r kind url; do
+    if [[ $kind == github ]]; then
+      curl -fsSL --retry 3 -H 'Accept: application/octet-stream' ${GH_TOKEN:+-H "Authorization: Bearer $GH_TOKEN"} "$url"
+    else
+      curl -fsSL --retry 3 "$url"
+    fi
+  done <<<"$list" | tar -x -C "$FILES.new"
+  [[ -f $FILES.new/cod4-linux/cod4x18_dedrun ]] || { rm -rf "$FILES.new"; echo "Preuzeta arhiva nema cod4-linux/cod4x18_dedrun"; exit 1; }
+  chmod -R a+rX "$FILES.new"
+  mv "$FILES" "$FILES.old"; mv "$FILES.new/cod4-linux" "$FILES"; rm -rf "$FILES.new" "$FILES.old"
+elif [[ -n ${1:-} ]]; then
   k="$1"
   [[ $k =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Neispravan broj servera: $k"; exit 1; }
   src="$APP_ROOT/servers/$k/data/serverfiles"
