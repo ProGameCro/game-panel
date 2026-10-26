@@ -61,7 +61,7 @@ router.get(
             const serverId = parsePositiveIntId(req.params.id);
             if (!serverId) return res.status(400).json({ error: 'Invalid server id' });
             const stateDir = path.join(getConfig().gamepanelDataDir, 'fastdl');
-            const info = await readJson<{ url?: string }>(path.join(stateDir, 'fastdl.json'));
+            const info = await readJson<{ url?: string; browserUrl?: string }>(path.join(stateDir, 'fastdl.json'));
             const published = new Set((await readJson<string[]>(path.join(stateDir, 'manifest.json'))) ?? []);
             const running = await docker
                 .getContainer('gamepanel-fastdl')
@@ -74,7 +74,9 @@ router.get(
                 published: published.has(`${serverId}/${file}`),
             }));
             const url = info?.url ? `${info.url.replace(/\/+$/, '')}/${serverId}` : null;
-            return res.json({ installed: Boolean(url), url, running, files });
+            // the same files over HTTPS for browsers (the game uses url, plain HTTP)
+            const browserUrl = info?.browserUrl ? `${info.browserUrl.replace(/\/+$/, '')}/${serverId}` : null;
+            return res.json({ installed: Boolean(url), url, browserUrl, running, files });
         } catch (error) {
             return res.status(500).json({ error: error instanceof Error ? error.message : 'Could not read the FastDL status' });
         }

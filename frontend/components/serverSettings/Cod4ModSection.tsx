@@ -221,7 +221,7 @@ export function Cod4ModSection({
   const [initial, setInitial] = useState({ mod: '', auth: '', material: '', xanim: '', xmodel: '', rcon: '', slots: '', fastdl: '' });
   // FastDL (gp-fastdl.sh): on/off for this server, plus the service's URL and what it publishes
   const [fastdlOn, setFastdlOn] = useState(false);
-  const [fastdl, setFastdl] = useState<{ installed: boolean; url: string | null; running: boolean; files: Array<{ path: string; published: boolean }> } | null>(null);
+  const [fastdl, setFastdl] = useState<{ installed: boolean; url: string | null; browserUrl?: string | null; running: boolean; files: Array<{ path: string; published: boolean }> } | null>(null);
   const [showFastdlFiles, setShowFastdlFiles] = useState(false);
 
   const [selected, setSelected] = useState(NO_MOD);
@@ -515,7 +515,15 @@ export function Cod4ModSection({
           </label>
           {fastdl?.installed ? (
             <span className={hint}>
-              <a href={fastdl.url ?? '#'} target="_blank" rel="noopener noreferrer" className="underline">{fastdl.url}</a>
+              {/* the game downloads over plain HTTP; browsers often refuse http://, so the link opens the HTTPS copy */}
+              <span className="font-mono">{fastdl.url}</span>
+              {fastdl.browserUrl && (
+                <>
+                  {' ('}
+                  <span title="The same files over HTTPS, for browsers. Folders give 403: open a .ff or .iwd file.">HTTPS: {fastdl.browserUrl}</span>
+                  {')'}
+                </>
+              )}
               {' · '}
               <span className={fastdl.running ? 'text-emerald-400' : 'text-red-400'}>
                 {fastdl.running ? 'web server running' : 'web server not running (bash gp-fastdl.sh)'}

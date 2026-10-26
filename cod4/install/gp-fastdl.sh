@@ -2,6 +2,7 @@
 # OVHcloud Game Panel: FastDL for Call of Duty 4 (mods and custom maps download over HTTP, like on TCAdmin).
 #  - Every CoD4 server has its own FastDL, by server number: /var/www/html/cod4/<server>/(mods|usermaps)/...,
 #    served at http://<panel domain>:8080/cod4/<server> (server 5: http://ovh.cod4x.org:8080/cod4/5).
+#    The same files over HTTPS for browsers: https://<panel domain>/fastdl/<server>/... (the game uses the HTTP link).
 #  - Sync: the service gamepanel-fastdl watches every CoD4 server and keeps its folder up to date by itself: new or
 #    changed .ff / .iwd files appear within seconds, deleted ones disappear; a new server gets its folder on its own.
 #    Only .ff and .iwd files are published (never configs). Big files are hard links (no extra disk space).
@@ -221,8 +222,32 @@ server {
 NGINX
 docker image inspect $IMAGE >/dev/null 2>&1 || docker pull -q $IMAGE >/dev/null
 docker rm -f $NAME >/dev/null 2>&1 || true
-docker run -d --name $NAME --restart unless-stopped -p "$PORT:80" \
+# HTTPS for browsers too: the panel's Traefik (with its certificate) passes https://<panel domain>/fastdl/... on to the
+# same web server (as /cod4/...). The game keeps using plain HTTP on $PORT.
+DOMAIN="$(grep -E '^DOMAIN=' "$APP_ROOT/deploy/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' ")"
+traefik="$(docker ps -q --filter label=com.docker.compose.project=gamepanel --filter label=com.docker.compose.service=traefik | head -1)"
+EDGE=""; [[ -n $traefik ]] && EDGE="$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$traefik" | awk '{print $1}')"
+labels=()
+if [[ -n $DOMAIN && -n $EDGE ]]; then
+  labels=(--label traefik.enable=true
+    --label "traefik.http.routers.gamepanel_fastdl.rule=Host(\`$DOMAIN\`) && PathPrefix(\`/fastdl/\`)"
+    --label traefik.http.routers.gamepanel_fastdl.entrypoints=websecure
+    --label traefik.http.routers.gamepanel_fastdl.tls=true
+    --label traefik.http.routers.gamepanel_fastdl.tls.certresolver=le
+    --label traefik.http.routers.gamepanel_fastdl.middlewares=gamepanel_fastdl_path
+    --label 'traefik.http.middlewares.gamepanel_fastdl_path.replacepathregex.regex=^/fastdl/(.*)'
+    --label 'traefik.http.middlewares.gamepanel_fastdl_path.replacepathregex.replacement=/cod4/$1'
+    --label traefik.http.services.gamepanel_fastdl.loadbalancer.server.port=80)
+fi
+docker run -d --name $NAME --restart unless-stopped -p "$PORT:80" "${labels[@]}" \
   -v "$WEB_ROOT:/usr/share/nginx/html:ro" -v "$ETC/nginx.conf:/etc/nginx/conf.d/default.conf:ro" $IMAGE >/dev/null
+if [[ ${#labels[@]} -gt 0 ]]; then
+  docker network connect "$EDGE" $NAME
+  browser_url="https://$DOMAIN/fastdl"
+else
+  browser_url=""
+  echo "== HTTPS preskočen (panelov Traefik ili DOMAIN nije pronađen); igra radi preko HTTP-a"
+fi
 if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
   ufw allow "$PORT/tcp" >/dev/null && echo "== Firewall (ufw): port $PORT otvoren"
 fi
@@ -232,7 +257,7 @@ fi
 host="${FASTDL_HOST:-$(grep -E '^DOMAIN=' "$APP_ROOT/deploy/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' ")}"
 [[ -n $host ]] || host="$(curl -4fsS --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')"
 url="http://$host:$PORT/cod4"
-echo "{\"url\": \"$url\"}" > "$STATE/fastdl.json"
+echo "{\"url\": \"$url\", \"browserUrl\": \"$browser_url\"}" > "$STATE/fastdl.json"
 sleep 1
 test_file="$(cd "$DIR" && find . -type f \( -name '*.ff' -o -name '*.iwd' \) | head -1)"
 if [[ -n $test_file ]]; then
@@ -248,6 +273,7 @@ for d in "$DIR"/*/; do
   echo "  server $k: $url/$k   (mods: $(ls "$d/mods" 2>/dev/null | wc -l), usermaps: $(ls "$d/usermaps" 2>/dev/null | wc -l))"
 done
 echo "Sinkronizacija svakih 10 s (servis $NAME), log: journalctl -u $NAME -f"
+[[ -n $browser_url ]] && echo "U pregledniku (HTTPS): $browser_url/<broj servera>/mods/<mod>/mod.ff  (igra koristi $url/<broj servera>)"
 echo
 echo "Uključi ga po serveru u panelu: Settings > Game config > Command line > FastDL > Save, pa restart."
 echo "(Novi CoD4 serveri ga dobiju uključenog već pri instalaciji.)"

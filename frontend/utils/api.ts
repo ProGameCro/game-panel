@@ -198,7 +198,7 @@ class ApiClient {
   // FastDL (gp-fastdl.sh): URL, web server state and this server's published mods / maps
   async getCod4FastDl(serverId: number) {
     const response = await this.client.get(`/api/cod4/fastdl/${serverId}`);
-    return response.data as { installed: boolean; url: string | null; running: boolean; files: Array<{ path: string; published: boolean }> };
+    return response.data as { installed: boolean; url: string | null; browserUrl?: string | null; running: boolean; files: Array<{ path: string; published: boolean }> };
   }
 
   async getCod4FilesStatus() {

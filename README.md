@@ -106,7 +106,9 @@ Players download mods and custom maps over HTTP, like on TCAdmin. Every CoD4 ser
 number: server 5 → `/var/www/html/cod4/5` at `http://<panel domain>:8080/cod4/5`, so servers with different versions of
 the same mod never mix. The service `gamepanel-fastdl` copies the `.ff` and `.iwd` files from each server's `mods/` and
 `usermaps/` and keeps them in sync every 10 seconds: new or changed files appear by themselves, deleted ones disappear,
-and a new server gets its folder on its own. Opening the address or a folder in a browser gives 403. Configs and
+and a new server gets its folder on its own. Opening the address or a folder in a browser gives 403.
+The game uses plain HTTP (`http://<panel domain>:8080/cod4/<server>`); browsers that refuse `http://` can open the same
+files over HTTPS through the panel's Traefik: `https://<panel domain>/fastdl/<server>/mods/<mod>/mod.ff`. Configs and
 other files are never published. A small web server (nginx container `gamepanel-fastdl`) serves the folder on port 8080
 (`FASTDL_PORT=8090 bash gp-fastdl.sh` for another one), because the panel's port 80 always redirects to HTTPS.
 
