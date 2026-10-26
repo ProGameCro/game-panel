@@ -394,6 +394,19 @@ function generatePalworldAdminPassword(): string {
   return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
 }
 
+// CoD4 RCON password: up to 8 letters and numbers (a longer one or special characters give "Bad rcon").
+// Generated with 8 characters: at least one small letter, one capital and one number.
+const COD4_RCON_PATTERN = /^[A-Za-z0-9]{1,8}$/;
+function generateCod4RconPassword(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const bytes = new Uint32Array(8);
+  for (;;) {
+    crypto.getRandomValues(bytes);
+    const password = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password) && /[0-9]/.test(password)) return password;
+  }
+}
+
 function ConfigModal({
   title, subtitle, provider, imageRef, serverName, setServerName, tcpPorts, setTcpPorts, udpPorts, setUdpPorts,
   envRows, setEnvRows, showEnv, mountRows, setMountRows, catalogHealthcheck, onHealthcheckChange,
@@ -501,10 +514,19 @@ function ConfigModal({
   const setCod4Slots = (val: string) => upsertEnv('COD4_MAXPLAYERS', val);
   const cod4SlotsInvalid =
     Boolean(showCod4Fields) && !(/^\d+$/.test(cod4Slots.trim()) && Number(cod4Slots) >= 1 && Number(cod4Slots) <= 64);
+  // RCON password: the backend puts it on the server's startup line (+rcon_password), never into server.cfg
+  const cod4Rcon = envRows.find((r) => r.key.trim().toUpperCase() === 'COD4_RCON_PASSWORD')?.value ?? '';
+  const setCod4Rcon = (val: string) => upsertEnv('COD4_RCON_PASSWORD', val);
+  const cod4RconInvalid = Boolean(showCod4Fields) && !COD4_RCON_PATTERN.test(cod4Rcon.trim());
+  const [showCod4Rcon, setShowCod4Rcon] = React.useState(false);
   React.useEffect(() => {
-    if (showCod4Fields && !envRows.some((r) => r.key.trim().toUpperCase() === 'COD4_MAXPLAYERS')) {
-      setEnvRows([...envRows, { key: 'COD4_MAXPLAYERS', value: '32' }]);
+    if (!showCod4Fields) return;
+    const missing: Array<{ key: string; value: string }> = [];
+    if (!envRows.some((r) => r.key.trim().toUpperCase() === 'COD4_MAXPLAYERS')) missing.push({ key: 'COD4_MAXPLAYERS', value: '32' });
+    if (!envRows.some((r) => r.key.trim().toUpperCase() === 'COD4_RCON_PASSWORD')) {
+      missing.push({ key: 'COD4_RCON_PASSWORD', value: generateCod4RconPassword() });
     }
+    if (missing.length > 0) setEnvRows([...envRows, ...missing]);
   }, [showCod4Fields, envRows, setEnvRows]);
   // CoD4 installs only from the cod4-linux folder on the panel server: check it before the install can start
   const [cod4Files, setCod4Files] = React.useState<Cod4FilesStatus | null>(null);
@@ -678,6 +700,47 @@ function ConfigModal({
                 className={`${inputCls} max-w-[10rem]`}
               />
               {cod4SlotsInvalid && <p className="mt-1.5 text-xs text-red-400">Enter a number from 1 to 64.</p>}
+            </div>
+          )}
+
+          {showCod4Fields && (
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                RCON Password
+                <InfoTip text="Up to 8 small and capital letters and numbers. It goes on the server's startup line (not into server.cfg). You can change it later in Settings > Game config > Command line." />
+              </label>
+              <div className="flex gap-2 max-w-sm">
+                <div className="relative flex-1">
+                  <input
+                    type={showCod4Rcon ? 'text' : 'password'}
+                    value={cod4Rcon}
+                    onChange={(e) => setCod4Rcon(e.target.value.trim())}
+                    maxLength={8}
+                    placeholder="Up to 8 letters and numbers"
+                    spellCheck={false}
+                    autoComplete="off"
+                    className={`${inputCls} pr-10`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCod4Rcon((v) => !v)}
+                    aria-label={showCod4Rcon ? 'Hide password' : 'Show password'}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                  >
+                    {showCod4Rcon ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCod4Rcon(generateCod4RconPassword())}
+                  className="flex-shrink-0 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                >
+                  Regenerate
+                </button>
+              </div>
+              {cod4RconInvalid && (
+                <p className="mt-1.5 text-xs text-red-400">Up to 8 characters: small and capital letters and numbers only.</p>
+              )}
             </div>
           )}
 
@@ -1035,7 +1098,7 @@ function ConfigModal({
               className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 text-gray-700 dark:text-white border border-gray-300 dark:border-gray-600/50 transition-all">
               Cancel
             </AppButton>
-            <AppButton tone="primary" onClick={onConfirm} disabled={loading || !serverName.trim() || eulaBlocked || rustRconTooShort || valheimPasswordTooShort || cod4SlotsInvalid || cod4FilesBlocked}
+            <AppButton tone="primary" onClick={onConfirm} disabled={loading || !serverName.trim() || eulaBlocked || rustRconTooShort || valheimPasswordTooShort || cod4SlotsInvalid || cod4RconInvalid || cod4FilesBlocked}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
               {loading ? 'Installing…' : 'Install'}
               <ArrowRight className="w-4 h-4" />

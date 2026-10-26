@@ -3,7 +3,7 @@ import { normalizeMountsPayload } from '../../utils/mounts.js';
 import { asOptionalString, normalizeEnvPayload } from '../installPayload.js';
 import type { ProviderInstallContext, ResolvedInstallSpec } from '../installTypes.js';
 import { getProviderRuntimeIdentity, runtimeConfigForIdentity } from '../runtimeIdentity.js';
-import { assertCod4FilesReady, COD4_LOCAL_IMAGE } from './adapters/cod4/index.js';
+import { assertCod4FilesReady, COD4_LOCAL_IMAGE, takeCod4RconPassword } from './adapters/cod4/index.js';
 
 function normalizeLinuxGsmEnv(payload: unknown): string[] {
     let env = normalizeEnvPayload(payload);
@@ -36,6 +36,14 @@ export async function resolveLinuxGsmInstallSpec(
     if (game.shortname === 'cod4') await assertCod4FilesReady();
     const mounts = normalizeMountsPayload(ctx.body.mounts) ?? [];
     const runtimeIdentity = getProviderRuntimeIdentity('linuxgsm');
+    let env = withCod4Defaults(game.shortname, normalizeLinuxGsmEnv(ctx.body.env));
+    const installSecrets: Record<string, string> = {};
+    if (game.shortname === 'cod4') {
+        // the RCON password from the install form goes on the startup line, not into the server's environment
+        const taken = takeCod4RconPassword(env);
+        env = taken.env;
+        if (taken.password) installSecrets.rconPassword = taken.password;
+    }
 
     return {
         provider: 'linuxgsm',
@@ -45,7 +53,7 @@ export async function resolveLinuxGsmInstallSpec(
         healthcheck: ctx.healthcheck,
         resourceLimits: ctx.resourceLimits,
         mounts,
-        env: withCod4Defaults(game.shortname, normalizeLinuxGsmEnv(ctx.body.env)),
+        env,
         runtimeIdentity,
         runtimeConfig: runtimeConfigForIdentity(runtimeIdentity, '/data', '/app'),
         providerMetadata: {
@@ -55,5 +63,6 @@ export async function resolveLinuxGsmInstallSpec(
             os: game.os,
         },
         steamCredentials: ctx.steamCredentials,
+        installSecrets,
     };
 }

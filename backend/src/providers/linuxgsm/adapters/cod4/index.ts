@@ -178,6 +178,44 @@ async function ensureServerConfig(dataDir: string, gameServerName: string): Prom
     });
 }
 
+// RCON password from the install form (COD4_RCON_PASSWORD): up to 8 letters and numbers, CoD4 refuses others ("Bad rcon")
+const RCON_PATTERN = /^[A-Za-z0-9]{1,8}$/;
+
+export function takeCod4RconPassword(env: string[]): { env: string[]; password: string | null } {
+    const entry = env.find((item) => item.startsWith('COD4_RCON_PASSWORD='));
+    const rest = env.filter((item) => !item.startsWith('COD4_RCON_PASSWORD='));
+    const password = entry?.slice('COD4_RCON_PASSWORD='.length).trim() ?? '';
+    if (!password) return { env: rest, password: null };
+    if (!RCON_PATTERN.test(password)) {
+        throw Object.assign(new Error('RCON password: up to 8 characters, small and capital letters and numbers only.'), {
+            statusCode: 400,
+        });
+    }
+    return { env: rest, password };
+}
+
+// LinuxGSM's startup line for CoD4 (lgsm/config-default/config-lgsm/cod4server/_default.cfg)
+const DEFAULT_STARTPARAMETERS =
+    '+set sv_punkbuster 0 +set fs_basepath ${serverfiles} +set fs_homepath ${serverfiles} +set sv_authorizemode "-1" ' +
+    '+set dedicated 2 +set net_ip ${ip} +set net_port ${port} +set sv_maxclients ${maxplayers} +map ${defaultmap} +exec ${servercfg}';
+
+async function defaultStartParameters(): Promise<string> {
+    const content = await fs.readFile(path.join(cod4LinuxGsmKitDir(), '_default.cfg'), 'utf8').catch(() => '');
+    const match = /^[ \t]*startparameters=(.*)$/m.exec(content);
+    if (!match) return DEFAULT_STARTPARAMETERS;
+    const raw = match[1].trim();
+    return raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
+}
+
+// same place and form as the Command line card: +rcon_password at the end of startparameters in <gameservername>.cfg,
+// after +exec, so it counts even if server.cfg has its own rcon_password
+async function setCod4RconPassword(dataDir: string, gameServerName: string, password: string): Promise<void> {
+    const parameters = `${await defaultStartParameters()} +rcon_password ${password}`;
+    await applyLinuxGsmConfigPatches({ dataDir, gameServerName }, [
+        { fileName: `${gameServerName}.cfg`, values: { startparameters: parameters } },
+    ]);
+}
+
 // the new server is called by the name given in the install form, not by the name in the folder's config
 // (which came from the server the folder was filled from)
 const HOSTNAME_LINE = /^[ \t]*(?:set[as]?[ \t]+)?sv_hostname[ \t].*$/gim;
@@ -219,6 +257,8 @@ export const cod4Adapter: GameAdapter = {
         const count = await linkCod4Files(ctx.dataDir);
         await ensureServerConfig(ctx.dataDir, ctx.gameServerName);
         if (ctx.serverName) await setCod4Hostname(ctx.dataDir, ctx.gameServerName, ctx.serverName);
+        const rcon = ctx.installSecrets?.rconPassword;
+        if (rcon) await setCod4RconPassword(ctx.dataDir, ctx.gameServerName, rcon);
         if (count) {
             logInfo('LINUXGSM:COD4', `Game files from ${cod4FilesHostDir()}: ${count.linked} linked, ${count.copied} copied`, {
                 serverId: ctx.serverId,

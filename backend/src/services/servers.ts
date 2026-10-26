@@ -103,6 +103,7 @@ export async function installServerAsync(
                 steamCredentials: spec.steamCredentials,
                 env: spec.env,
                 serverName: displayName,
+                installSecrets: spec.installSecrets,
             });
         }
 

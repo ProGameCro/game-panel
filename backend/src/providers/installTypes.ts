@@ -27,4 +27,6 @@ export type ResolvedInstallSpec = {
     runtimeConfig: Record<string, unknown>;
     providerMetadata: Record<string, unknown>;
     steamCredentials: SteamCredentials | null;
+    // values the game adapter needs once during the install, never stored with the server (e.g. a password)
+    installSecrets?: Record<string, string>;
 };
