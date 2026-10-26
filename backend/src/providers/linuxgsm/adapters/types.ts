@@ -11,6 +11,8 @@ export type BeforeContainerCreateContext = {
     steamCredentials: SteamCredentials | null;
     // the server's environment variables (KEY=VALUE)
     env?: string[];
+    // the name given in the install form
+    serverName?: string;
 };
 
 export type AfterContainerStartContext = {

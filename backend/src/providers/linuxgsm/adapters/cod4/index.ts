@@ -166,6 +166,25 @@ async function ensureServerConfig(dataDir: string, gameServerName: string): Prom
     });
 }
 
+// the new server is called by the name given in the install form, not by the name in the folder's config
+// (which came from the server the folder was filled from)
+const HOSTNAME_LINE = /^[ \t]*(?:set[as]?[ \t]+)?sv_hostname[ \t].*$/gim;
+
+export async function setCod4Hostname(dataDir: string, gameServerName: string, name: string): Promise<void> {
+    const clean = name.replace(/[\x00-\x1f\x7f"]/g, '').trim().slice(0, 64);
+    if (!clean) return;
+    const file = path.join(dataDir, 'serverfiles', 'main', `${path.basename(gameServerName)}.cfg`);
+    const current = await fs.readFile(file, 'utf8').catch(() => '');
+    const line = `set sv_hostname "${clean}"`;
+    const next = new RegExp(HOSTNAME_LINE.source, 'im').test(current)
+        ? current.replace(HOSTNAME_LINE, line)
+        : `${current}${current && !current.endsWith('\n') ? '\n' : ''}${line}\n`;
+    // a new file in place of the old one: never write into a file that may be shared
+    const temp = `${file}.tmp-${process.pid}`;
+    await fs.writeFile(temp, next, 'utf8');
+    await fs.rename(temp, file);
+}
+
 // slots chosen in the install form (COD4_MAXPLAYERS), written as LinuxGSM's maxplayers (+set sv_maxclients)
 export function cod4MaxPlayers(env: string[] | undefined): number | null {
     const raw = (env ?? []).find((entry) => entry.startsWith('COD4_MAXPLAYERS='))?.slice('COD4_MAXPLAYERS='.length).trim() ?? '';
@@ -187,6 +206,7 @@ export const cod4Adapter: GameAdapter = {
         await assertCod4FilesReady();
         const count = await linkCod4Files(ctx.dataDir);
         await ensureServerConfig(ctx.dataDir, ctx.gameServerName);
+        if (ctx.serverName) await setCod4Hostname(ctx.dataDir, ctx.gameServerName, ctx.serverName);
         if (count) {
             logInfo('LINUXGSM:COD4', `Game files from ${cod4FilesHostDir()}: ${count.linked} linked, ${count.copied} copied`, {
                 serverId: ctx.serverId,

@@ -102,6 +102,7 @@ export async function installServerAsync(
                 dataDir: storage.dataDir,
                 steamCredentials: spec.steamCredentials,
                 env: spec.env,
+                serverName: displayName,
             });
         }
 
