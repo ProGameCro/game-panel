@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # OVHcloud Game Panel: FastDL for Call of Duty 4 (mods and custom maps download over HTTP, like on TCAdmin).
-#  - Files: /var/www/html/cod4 (mods/<mod>/..., usermaps/<map>/...), served at http://<server>:8080/cod4
+#  - Files: /var/www/html/cod4 (mods/<mod>/..., usermaps/<map>/...), served at http://<panel domain>:8080/cod4
 #  - Sync: the service gamepanel-fastdl watches every CoD4 server (and /opt/gamepanel/cod4-linux) and keeps the
 #    folder up to date by itself: new or changed .ff / .iwd files appear within seconds, deleted ones disappear.
 #    Only .ff and .iwd files are published (never configs). Big files are hard links (no extra disk space).
 # Usage (as root):
 #   bash gp-fastdl.sh                 install / update (safe to run again)
 #   FASTDL_PORT=8090 bash gp-fastdl.sh   another port
+#   FASTDL_HOST=fastdl.example.org bash gp-fastdl.sh   another host name in the URL (default: the panel's domain)
 #   bash gp-fastdl.sh --remove        remove the service and the web server (the folder stays)
 set -euo pipefail
 cd /
@@ -219,8 +220,10 @@ if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active
 fi
 
 # ---- 3) how to use it -------------------------------------------------------------------------------------------
-ip="$(curl -4fsS --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')"
-url="http://$ip:$PORT/cod4"
+# the panel's domain (DOMAIN in deploy/.env, e.g. ovh.cod4x.org); FASTDL_HOST=... for another name
+host="${FASTDL_HOST:-$(grep -E '^DOMAIN=' "$APP_ROOT/deploy/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' ")}"
+[[ -n $host ]] || host="$(curl -4fsS --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')"
+url="http://$host:$PORT/cod4"
 echo "{\"url\": \"$url\"}" > "$ETC/fastdl.json"
 sleep 1
 test_file="$(cd "$DIR" && find . -type f \( -name '*.ff' -o -name '*.iwd' \) | head -1)"

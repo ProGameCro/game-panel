@@ -29,7 +29,7 @@ Additions for CoD4 servers installed through LinuxGSM (Game Panel 1.6.0). Everyt
 | Server → **Settings → Game config → B3 (BigBrotherBot)** | Install / Start / Stop / Restart / Uninstall, console, `b3.xml` editor, logs. |
 | **Installing a new CoD4 server** | a **Slots** field; the game files come from your own folder `/opt/gamepanel/cod4-linux` (hard links: no extra disk space, ready in seconds) and **nothing is downloaded**, not even LinuxGSM from GitHub. The form checks the folder first and does not start the install while files are missing. |
 | `https://<panel domain>/pma/` | **phpMyAdmin** for the B3 database (MariaDB). |
-| `http://<server>:8080/cod4` | **FastDL** for mods and custom maps (`/var/www/html/cod4`), kept in sync with all CoD4 servers by itself. |
+| `http://<panel domain>:8080/cod4` | **FastDL** for mods and custom maps (`/var/www/html/cod4`), kept in sync with all CoD4 servers by itself. |
 | Sidebar → **✨** next to the light/dark button | **Neon** theme: animated aurora lights and grid, glass cards, neon edges and buttons (stops for reduced motion). Click again for the **orange** variant, once more to turn it off. |
 | User menu **⋮** → **Panel name** (admins) | Your own panel name instead of the *OVHcloud Game Panel* logo, for all users: sidebar, login page, mobile header, browser tab. *Use the logo* brings the logo back. |
 
@@ -113,7 +113,7 @@ Then in each server's `server.cfg` (the script prints the exact URL):
 ```
 set sv_allowDownload "1"
 set sv_wwwDownload "1"
-set sv_wwwBaseURL "http://<server IP>:8080/cod4"
+set sv_wwwBaseURL "http://<panel domain>:8080/cod4"
 set sv_wwwDlDisconnected "0"
 ```
 
