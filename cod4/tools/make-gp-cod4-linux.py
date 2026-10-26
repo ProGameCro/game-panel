@@ -23,7 +23,7 @@ FILES = {
                  'components/admin/AdminLive.tsx', 'components/admin/AdminMaps.tsx', 'components/admin/AdminContent.tsx',
                  'components/admin/AdminB3.tsx', 'components/admin/AdminActivity.tsx', 'components/admin/AdminServerCfg.tsx',
                  'components/admin/AdminBackups.tsx', 'components/admin/AdminCod4Files.tsx', 'components/admin/AdminFtp.tsx',
-                 'components/serverSettings/FtpSection.tsx', 'utils/adminApi.ts',
+                 'components/serverSettings/FtpSection.tsx', 'components/serverSettings/B3Section.tsx', 'utils/adminApi.ts',
                  'components/gameServersTable/GameIcon.tsx', 'components/gameServersTable/GameServerCard.tsx',
                  'components/gameServersTable/GameServersDesktopTable.tsx', 'index.html', 'public/favicon.svg',
                  # theme and panel name (formerly gp-neon-theme.sh)

@@ -280,6 +280,16 @@ html.gp-neon .gp-app-button--primary:hover:not(:disabled) {
   transform: translateY(-1px);
 }
 
+/* a primary button that stays still (inside a framed box the moving gradient looks restless) */
+html.gp-neon .gp-app-button--primary.gp-btn-static {
+  animation: none;
+  background-position: 0 0 !important;
+}
+
+html.gp-neon .gp-app-button--primary.gp-btn-static:hover:not(:disabled) {
+  transform: none;
+}
+
 html.gp-neon .gp-app-button--primary:disabled {
   animation: none;
   opacity: 0.55;

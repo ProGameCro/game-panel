@@ -130,9 +130,10 @@ export function FtpSection({
 
       {info?.installed && account && (
         <>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1.2fr)]">
             <CopyField label="Host" value={info.host ?? ''} textSecondary={textSecondary} />
-            <CopyField label="Port" value={`FTP ${info.ftpPort} · SFTP ${info.sftpPort}`} textSecondary={textSecondary} />
+            <CopyField label="FTP / FTPS port" value={String(info.ftpPort ?? '')} textSecondary={textSecondary} />
+            <CopyField label="SFTP port" value={String(info.sftpPort ?? '')} textSecondary={textSecondary} />
             <CopyField label="Username" value={account.username} textSecondary={textSecondary} />
             <CopyField label="Password" value={account.password} secret textSecondary={textSecondary} />
           </div>

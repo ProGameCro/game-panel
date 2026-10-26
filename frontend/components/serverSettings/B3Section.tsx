@@ -593,14 +593,14 @@ export function B3Section({
       </div>
 
       {!loading && !installed && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-500/50 bg-sky-500/5 p-4">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-700 p-4">
           <span className={`text-sm ${textSecondary}`}>
             Creates the <code>b3</code> folder (conf, parsers, extplugins, logs) in this server.
           </span>
           {canWriteFileManager && (
             <AppButton
               tone="primary"
-              className="!h-auto !px-5 !py-2"
+              className="gp-btn-static !h-auto !px-5 !py-2"
               onClick={() => void install()}
               disabled={busy !== null}
             >
