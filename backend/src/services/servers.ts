@@ -29,6 +29,8 @@ import {
     ServerInstallCancelledError,
 } from './serverActionPolicy.js';
 
+const LOCAL_IMAGE_PREFIX = 'gamepanel-local/';
+
 type GameServerWithContainer = GameServerRow & {
     docker_container_id: string;
 };
@@ -106,7 +108,14 @@ export async function installServerAsync(
         await assertServerExistsDuringInstall(serverId);
         await installProgressRepository.update(serverId, 0, 'pulling_image');
 
-        await dockerUtils.pullImageByName(spec.dockerImage);
+        // images built on this server (gamepanel-local/...) are not on any registry
+        if (spec.dockerImage.startsWith(LOCAL_IMAGE_PREFIX)) {
+            if (!(await dockerUtils.imageExists(spec.dockerImage))) {
+                throw new Error(`Local image ${spec.dockerImage} is missing`);
+            }
+        } else {
+            await dockerUtils.pullImageByName(spec.dockerImage);
+        }
         await assertServerExistsDuringInstall(serverId);
         await installProgressRepository.update(serverId, 25, 'preparing_files');
 

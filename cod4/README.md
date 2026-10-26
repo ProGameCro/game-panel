@@ -7,8 +7,9 @@ installed through LinuxGSM. Everything was built and tested on **Ubuntu 24.04**.
   `fs_game` (mod), `rcon_password`. Nothing is written to `server.cfg`; the RCON password is set after `server.cfg`, so it wins.
 - **B3 (BigBrotherBot) card**: Install / Start / Stop / Restart / Uninstall, live console, config editor, logs.
   B3 runs in its own Docker container next to the game server, from the server folder `b3/`, with a MariaDB database.
-- **New CoD4 servers** start from a copy of an existing server (no download), get a *Slots* field in the install form and
-  skip the LinuxGSM update check at every start.
+- **New CoD4 servers** are installed from the folder `/opt/gamepanel/cod4-linux` (hard links, no extra disk space) with a
+  local image (`gamepanel-local/cod4`, built from `linuxgsm/`), so nothing is downloaded, not even LinuxGSM from GitHub.
+  The install form checks the folder first and has a *Slots* field.
 - **phpMyAdmin** for the B3 database at `https://<panel domain>/pma/`.
 - **Neon theme**: an animated theme (aurora lights, moving grid, glass cards) in cyan or orange, switched with the ✨ button in the sidebar.
 - **Panel name**: admins can replace the *OVHcloud Game Panel* logo with their own name (user menu ⋮ → Panel name).
@@ -20,8 +21,8 @@ Run the scripts from `install/` in this order (each one is safe to run again, al
 ```bash
 bash gp-cod4-cmdline.sh      # Command line card
 bash gp-b3.sh                # B3 card, B3 image, B3 service, MariaDB
-bash gp-cod4-template.sh     # new CoD4 servers: Slots, no update on start, local template
-bash gp-cod4-template.sh 5   # optional: use server 5's files as template for new CoD4 servers
+bash gp-cod4-linux.sh        # new CoD4 servers from /opt/gamepanel/cod4-linux, local image, Slots
+bash gp-cod4-linux.sh 5      # optional: fill /opt/gamepanel/cod4-linux with server 5's files
 bash gp-pma.sh               # optional: phpMyAdmin at https://<panel domain>/pma/
 bash gp-db-root.sh           # only if the MariaDB root login does not work
 bash gp-neon-theme.sh        # optional: Neon theme and panel name
@@ -44,7 +45,8 @@ Then reload the panel (Ctrl+Shift+R) and open a CoD4 server > Settings > Game co
 |---|---|
 | `install/` | the installer scripts (all files embedded, nothing else needed) |
 | `b3/` | B3 Docker image (Dockerfile, entrypoint), host service `gp-b3d.py`, `cod4x18.py`, B3 zip, database schema |
-| `tools/` | `make-gp-b3.sh`, `make-gp-cod4-template.sh` and `make-gp-neon-theme.py` rebuild the installers from this repository's sources; `patches/` are the small edits the installers apply to the panel |
+| `linuxgsm/` | the local CoD4 image: Dockerfile and the replaced `check_gamedig.sh` (no npm / GitHub at every start) |
+| `tools/` | `make-gp-b3.sh`, `make-gp-cod4-linux.py` and `make-gp-neon-theme.py` rebuild the installers from this repository's sources; `patches/` are the small edits the installers apply to the panel |
 
 The panel changes themselves are the commits of this fork (frontend `components/serverSettings/Cod4ModSection.tsx`,
 `B3Section.tsx`, backend `providers/linuxgsm/adapters/cod4`).

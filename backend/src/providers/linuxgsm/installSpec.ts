@@ -3,6 +3,7 @@ import { normalizeMountsPayload } from '../../utils/mounts.js';
 import { asOptionalString, normalizeEnvPayload } from '../installPayload.js';
 import type { ProviderInstallContext, ResolvedInstallSpec } from '../installTypes.js';
 import { getProviderRuntimeIdentity, runtimeConfigForIdentity } from '../runtimeIdentity.js';
+import { assertCod4FilesReady, COD4_LOCAL_IMAGE } from './adapters/cod4/index.js';
 
 function normalizeLinuxGsmEnv(payload: unknown): string[] {
     let env = normalizeEnvPayload(payload);
@@ -31,13 +32,15 @@ export async function resolveLinuxGsmInstallSpec(
     }
 
     const game = await getLinuxGsmGameForInstall(shortname);
+    // Call of Duty 4 installs only from the local cod4-linux folder and image: refuse before anything starts
+    if (game.shortname === 'cod4') await assertCod4FilesReady();
     const mounts = normalizeMountsPayload(ctx.body.mounts) ?? [];
     const runtimeIdentity = getProviderRuntimeIdentity('linuxgsm');
 
     return {
         provider: 'linuxgsm',
         catalogId: game.shortname,
-        dockerImage: game.docker_image,
+        dockerImage: game.shortname === 'cod4' ? COD4_LOCAL_IMAGE : game.docker_image,
         ports: ctx.ports,
         healthcheck: ctx.healthcheck,
         resourceLimits: ctx.resourceLimits,

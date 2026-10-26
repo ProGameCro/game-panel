@@ -7,7 +7,7 @@ import type { InstallInteraction, InstallStep } from '../types/gameServer';
 import { minecraftJavaVariants, type OvhcloudImage } from '../utils/ovhcloudCatalog';
 import { OVH_UNIFIED, filterLgsmForUnified } from '../utils/unifiedGameCatalog';
 import { getLinuxGsmGames, type LinuxGsmGame } from '../utils/linuxGsmCatalog';
-import { apiClient } from '../utils/api';
+import { apiClient, type Cod4FilesStatus } from '../utils/api';
 import { GameVersionModal } from './GameVersionModal';
 import { AppButton, AppSelect, AppToggle, InfoTip } from '../src/ui/components';
 import { ProviderLogo } from './gameServersTable/ProviderBadge';
@@ -506,6 +506,21 @@ function ConfigModal({
       setEnvRows([...envRows, { key: 'COD4_MAXPLAYERS', value: '32' }]);
     }
   }, [showCod4Fields, envRows, setEnvRows]);
+  // CoD4 installs only from the cod4-linux folder on the panel server: check it before the install can start
+  const [cod4Files, setCod4Files] = React.useState<Cod4FilesStatus | null>(null);
+  const [cod4FilesError, setCod4FilesError] = React.useState<string | null>(null);
+  const checkCod4Files = React.useCallback(() => {
+    setCod4Files(null);
+    setCod4FilesError(null);
+    apiClient
+      .getCod4FilesStatus()
+      .then(setCod4Files)
+      .catch((e) => setCod4FilesError(e?.response?.data?.error ?? 'Could not check the CoD4 files.'));
+  }, []);
+  React.useEffect(() => {
+    if (showCod4Fields) checkCod4Files();
+  }, [showCod4Fields, checkCod4Files]);
+  const cod4FilesBlocked = Boolean(showCod4Fields) && !cod4Files?.ready;
 
   const rustEnvSeeded = React.useRef(false);
   React.useEffect(() => {
@@ -663,6 +678,39 @@ function ConfigModal({
                 className={`${inputCls} max-w-[10rem]`}
               />
               {cod4SlotsInvalid && <p className="mt-1.5 text-xs text-red-400">Enter a number from 1 to 64.</p>}
+            </div>
+          )}
+
+          {showCod4Fields && (
+            <div
+              className={`rounded-lg border px-3 py-2.5 text-sm ${
+                cod4Files?.ready
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                  : cod4Files || cod4FilesError
+                    ? 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300'
+                    : 'border-gray-500/30 text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              {!cod4Files && !cod4FilesError && 'Checking the CoD4 files…'}
+              {cod4FilesError && cod4FilesError}
+              {cod4Files?.ready && (
+                <>Game files from <code>{cod4Files.folder}</code>: ready, nothing is downloaded.</>
+              )}
+              {cod4Files && !cod4Files.ready && (
+                <>
+                  <p className="font-semibold">The server cannot be installed yet:</p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {cod4Files.problems.map((problem) => (
+                      <li key={problem}>{problem}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {!cod4Files?.ready && (cod4Files || cod4FilesError) && (
+                <button type="button" onClick={checkCod4Files} className="mt-2 text-xs font-semibold underline">
+                  Check again
+                </button>
+              )}
             </div>
           )}
 
@@ -987,7 +1035,7 @@ function ConfigModal({
               className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 text-gray-700 dark:text-white border border-gray-300 dark:border-gray-600/50 transition-all">
               Cancel
             </AppButton>
-            <AppButton tone="primary" onClick={onConfirm} disabled={loading || !serverName.trim() || eulaBlocked || rustRconTooShort || valheimPasswordTooShort || cod4SlotsInvalid}
+            <AppButton tone="primary" onClick={onConfirm} disabled={loading || !serverName.trim() || eulaBlocked || rustRconTooShort || valheimPasswordTooShort || cod4SlotsInvalid || cod4FilesBlocked}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
               {loading ? 'Installing…' : 'Install'}
               <ArrowRight className="w-4 h-4" />

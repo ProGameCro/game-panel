@@ -27,7 +27,7 @@ Additions for CoD4 servers installed through LinuxGSM (Game Panel 1.6.0). Everyt
 |---|---|
 | Server → **Settings → Game config → Command line** | Slots, `sv_authtoken`, Materials / Xanims / Xmodels, mod (`fs_game`), `rcon_password`. Nothing is written to `server.cfg`, and the RCON password works even if `server.cfg` has its own. |
 | Server → **Settings → Game config → B3 (BigBrotherBot)** | Install / Start / Stop / Restart / Uninstall, console, `b3.xml` editor, logs. |
-| **Installing a new CoD4 server** | a **Slots** field; the game files are copied from one of your servers instead of downloaded; no GitHub update check at every start. |
+| **Installing a new CoD4 server** | a **Slots** field; the game files come from your own folder `/opt/gamepanel/cod4-linux` (hard links: no extra disk space, ready in seconds) and **nothing is downloaded**, not even LinuxGSM from GitHub. The form checks the folder first and does not start the install while files are missing. |
 | `https://<panel domain>/pma/` | **phpMyAdmin** for the B3 database (MariaDB). |
 | Sidebar → **✨** next to the light/dark button | **Neon** theme: animated aurora lights and grid, glass cards, neon edges and buttons (stops for reduced motion). Click again for the **orange** variant, once more to turn it off. |
 | User menu **⋮** → **Panel name** (admins) | Your own panel name instead of the *OVHcloud Game Panel* logo, for all users: sidebar, login page, mobile header, browser tab. *Use the logo* brings the logo back. |
@@ -36,18 +36,18 @@ Additions for CoD4 servers installed through LinuxGSM (Game Panel 1.6.0). Everyt
 
 ```bash
 cd ~
-for f in gp-cod4-cmdline.sh gp-b3.sh gp-cod4-template.sh gp-pma.sh gp-db-root.sh gp-neon-theme.sh; do
+for f in gp-cod4-cmdline.sh gp-b3.sh gp-cod4-linux.sh gp-pma.sh gp-db-root.sh gp-neon-theme.sh; do
   curl -fsSLO https://raw.githubusercontent.com/ProGameCro/game-panel/main/cod4/install/$f
 done
 
 bash gp-cod4-cmdline.sh      # 1. Command line card
 bash gp-b3.sh                # 2. B3 card + B3 + MariaDB database
-bash gp-cod4-template.sh     # 3. Slots and faster start for new CoD4 servers
+bash gp-cod4-linux.sh 5      # 3. new CoD4 servers from /opt/gamepanel/cod4-linux (filled from server 5)
 bash gp-pma.sh               # 4. (optional) phpMyAdmin
 bash gp-neon-theme.sh        # 5. (optional) Neon theme (cyan / orange) and panel name
 ```
 
-Then reload the panel in the browser with **Ctrl+Shift+R**. All scripts can be run again, and **after every panel update** run 1–3 again.
+Then reload the panel in the browser with **Ctrl+Shift+R**. All scripts can be run again, and **after every panel update** run 1–3 again (`gp-cod4-linux.sh` without a number).
 
 ### B3 step by step
 
@@ -60,14 +60,25 @@ Then reload the panel in the browser with **Ctrl+Shift+R**. All scripts can be r
 - Parser **`cod4x18`** works without the b3hide plugin; if the server loads b3hide, `cod4x` works too.
 - B3 sees the server folder as `/data` (e.g. `game_log: /data/serverfiles/main/games_mp.log`).
 
-### Template for new CoD4 servers
+### Game files for new CoD4 servers (`/opt/gamepanel/cod4-linux`)
 
 ```bash
-bash ~/gp-cod4-template.sh       # list your CoD4 servers
-bash ~/gp-cod4-template.sh 5     # server 5's files become the template
+bash ~/gp-cod4-linux.sh        # set up the folder, the local image and the panel; shows what is in the folder
+bash ~/gp-cod4-linux.sh 5      # fill the folder with the files of server 5 (replaces what is there)
 ```
 
-Every new CoD4 server then gets these files (CoD4X, mods, maps) right away, without downloading. Run it again after changing mods or maps.
+Or put the CoD4X files into `/opt/gamepanel/cod4-linux` yourself (FTP, `cp -a`): `cod4x18_dedrun`, `main` (with the
+`.iwd` files), `zone`, and `mods` / `usermaps` if you want them on every new server. `main/cod4server.cfg` in the folder
+is the starting config of new servers.
+
+- A new server gets **hard links** to the big files (no extra disk space, instant) and copies of the small ones, so
+  editing a config on one server never changes another one. (Symbolic links would not work here: the game containers
+  cannot see paths outside their own folder, and the panel's file manager does not open symbolic links.)
+- To change a big file for **new** servers only, delete it in the folder and copy the new one in (or use `rsync`).
+  Overwriting it in place (`cp` over it) also changes it on every server installed from the folder.
+- Servers use the local image `gamepanel-local/cod4` (the LinuxGSM image plus the files LinuxGSM would fetch from
+  GitHub). After `docker pull gameservermanagers/gameserver:cod4`, run the script again to rebuild it.
+- Servers installed before keep running as they are.
 
 ### Troubleshooting
 
@@ -143,7 +154,7 @@ sudo bash ./deploy/install.sh
 ```
 
 > This installs the panel from this fork, so the CoD4 **Command line** and **B3** cards are already in it. For B3 itself
-> (image, MariaDB, service), slots and templates still run `gp-b3.sh` and `gp-cod4-template.sh` from
+> (image, MariaDB, service), and the CoD4 game files folder still run `gp-b3.sh` and `gp-cod4-linux.sh` from
 > [the CoD4 instructions](#-call-of-duty-4-cod4x--b3-how-to-use); they skip the panel parts that are already there.
 
 During installation, you'll be prompted for:

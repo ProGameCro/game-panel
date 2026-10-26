@@ -194,6 +194,12 @@ class ApiClient {
     };
   }
 
+  // Call of Duty 4: are the cod4-linux folder and the local image ready for an install?
+  async getCod4FilesStatus() {
+    const response = await this.client.get('/api/cod4/files');
+    return response.data as Cod4FilesStatus;
+  }
+
   async getCurrentUser() {
     const response = await this.client.get('/api/auth/me');
     return response.data as {
@@ -1433,5 +1439,7 @@ class ApiClient {
     return this.realtime.getWebSocketUrl();
   }
 }
+
+export type Cod4FilesStatus = { ready: boolean; folder: string; problems: string[] };
 
 export const apiClient = new ApiClient();
