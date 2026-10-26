@@ -1,6 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  PenLine,
+  Plus,
+  Trash2,
+  X,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
@@ -78,36 +85,163 @@ function renderDescriptionWithLinks(text: string) {
   );
 }
 
+type NewsDraft = { title: string; description: string; iconKey: string; date: string };
+
+const toDateInput = (timestamp: number): string => {
+  const d = Number.isFinite(Number(timestamp)) ? new Date(Number(timestamp)) : new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const fromDateInput = (value: string): number => {
+  const [y, m, d] = value.split('-').map(Number);
+  return y && m && d ? new Date(y, m - 1, d, 12).getTime() : Date.now();
+};
+
+// Editor for the panel's own news (Super Admins). Saves the whole list at once.
+function NewsEditor({ items, onClose, onSaved }: { items: CatalogNewsItem[]; onClose: () => void; onSaved: (news: CatalogNewsItem[]) => void }) {
+  const [drafts, setDrafts] = useState<NewsDraft[]>(() =>
+    items.map((n) => ({ title: n.title, description: n.description, iconKey: normalizeNewsIconKey(n.iconKey), date: toDateInput(n.date) }))
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const update = (index: number, patch: Partial<NewsDraft>) =>
+    setDrafts((list) => list.map((d, i) => (i === index ? { ...d, ...patch } : d)));
+  const move = (index: number, by: number) =>
+    setDrafts((list) => {
+      const next = [...list];
+      const [item] = next.splice(index, 1);
+      next.splice(index + by, 0, item);
+      return next;
+    });
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await apiClient.savePanelNews(
+        drafts.map((d) => ({ title: d.title, description: d.description, iconKey: d.iconKey, date: fromDateInput(d.date) }))
+      );
+      onSaved(res.news);
+    } catch (e) {
+      setError((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Could not save the news.');
+    } finally {
+      setSaving(false);
+    }
+  };
+  const field = 'w-full rounded-lg border border-white/10 bg-[#0b1324] px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-cyan-400)]';
+
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4" onMouseDown={() => !saving && onClose()}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="gp-news-editor-title"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl border border-white/10 bg-[#0f1a2b] shadow-2xl"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <h3 id="gp-news-editor-title" className="text-base font-semibold text-white">News</h3>
+          <button type="button" onClick={onClose} disabled={saving} aria-label="Close" className="rounded p-1 text-gray-400 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          {drafts.length === 0 && <p className="text-sm text-gray-400">No news yet. The bar is hidden for users while there is none.</p>}
+          {drafts.map((d, i) => (
+            <div key={i} className="space-y-2 rounded-lg border border-white/10 p-3">
+              <div className="flex gap-2">
+                <input
+                  value={d.title}
+                  onChange={(e) => update(i, { title: e.target.value })}
+                  maxLength={120}
+                  placeholder="Title"
+                  className={field}
+                />
+                <button type="button" onClick={() => move(i, -1)} disabled={i === 0} title="Up" className="rounded-lg border border-white/10 px-2 text-gray-300 disabled:opacity-30">
+                  <ArrowUp className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => move(i, 1)} disabled={i === drafts.length - 1} title="Down" className="rounded-lg border border-white/10 px-2 text-gray-300 disabled:opacity-30">
+                  <ArrowDown className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => setDrafts((list) => list.filter((_, j) => j !== i))} title="Delete" className="rounded-lg border border-red-500/40 px-2 text-red-300 hover:text-red-200">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+              <textarea
+                value={d.description}
+                onChange={(e) => update(i, { description: e.target.value })}
+                maxLength={1000}
+                rows={2}
+                placeholder="Text (links work)"
+                className={field}
+              />
+              <div className="flex gap-2">
+                <select value={d.iconKey} onChange={(e) => update(i, { iconKey: e.target.value })} className={`${field} max-w-[12rem]`}>
+                  {NEWS_ICON_KEYS.map((key) => (
+                    <option key={key} value={key}>{key}</option>
+                  ))}
+                </select>
+                <input type="date" value={d.date} onChange={(e) => update(i, { date: e.target.value })} className={`${field} max-w-[11rem]`} />
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setDrafts((list) => [...list, { title: '', description: '', iconKey: 'news', date: toDateInput(Date.now()) }])}
+            disabled={drafts.length >= 30}
+            className="inline-flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-gray-200 hover:bg-white/10 disabled:opacity-40"
+          >
+            <Plus className="h-4 w-4" /> Add news
+          </button>
+        </div>
+        {error && <p className="px-5 pb-2 text-sm text-red-400">{error}</p>}
+        <div className="flex justify-end gap-2 border-t border-white/10 px-5 py-3">
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/10">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={saving}
+            className="gp-app-button--primary rounded-lg bg-[#0050d7] px-4 py-2 text-sm font-semibold text-white hover:bg-[#157eea] disabled:opacity-60"
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export function NewsPanel() {
   const [newsItems, setNewsItems] = useState<CatalogNewsItem[]>([]);
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
+  const [editing, setEditing] = useState(false);
+
+  // this panel's own news (not OVHcloud's); Super Admins can edit them
+  const loadNews = useCallback(async () => {
+    try {
+      const response = await apiClient.getPanelNews();
+      setNewsItems(Array.isArray(response.news) ? response.news : []);
+    } catch (error) {
+      console.error('Failed to load news:', error);
+      setNewsItems([]);
+    } finally {
+      setCurrentNewsIndex(0);
+      setLoaded(true);
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const loadNews = async () => {
-      try {
-        const response = await apiClient.getNews(20);
-        if (cancelled) return;
-
-        setNewsItems(Array.isArray(response.news) ? response.news : []);
-        setCurrentNewsIndex(0);
-      } catch (error) {
-        console.error('Failed to load news:', error);
-        if (!cancelled) {
-          setNewsItems([]);
-          setCurrentNewsIndex(0);
-        }
-      }
-    };
-
     void loadNews();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    apiClient
+      .getCurrentUser()
+      .then((me) => setCanEdit(Boolean(me.user?.isRoot)))
+      .catch(() => setCanEdit(false));
+  }, [loadNews]);
 
   useEffect(() => {
     if (newsItems.length <= 1 || isPaused) return;
@@ -169,7 +303,34 @@ export function NewsPanel() {
     }
   };
 
+  // users see nothing while there is no news; Super Admins see the bar with its edit button
+  if (!loaded || (newsItems.length === 0 && !canEdit)) return null;
+
+  const editButton = canEdit ? (
+    <AppButton
+      onClick={() => setEditing(true)}
+      tone="ghost"
+      className="h-7 rounded border-none bg-transparent px-2 text-xs text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
+      aria-label="Edit news"
+      title="Edit news"
+    >
+      <span className="inline-flex items-center gap-1"><PenLine className="h-3.5 w-3.5" /> Edit</span>
+    </AppButton>
+  ) : null;
+
   return (
+    <>
+    {editing && (
+      <NewsEditor
+        items={newsItems}
+        onClose={() => setEditing(false)}
+        onSaved={(news) => {
+          setNewsItems(news);
+          setCurrentNewsIndex(0);
+          setEditing(false);
+        }}
+      />
+    )}
     <AppCard
       className="w-full overflow-hidden rounded-lg border border-gray-800 shadow-[0_4px_20px_rgba(2,6,23,0.5),0_1px_4px_rgba(2,6,23,0.25)]"
       role="region"
@@ -203,6 +364,7 @@ export function NewsPanel() {
               <span className="text-xs text-gray-400 whitespace-nowrap">
                 {formatNewsDate(currentNews.date)}
               </span>
+              {editButton}
               {newsItems.length > 1 && (
                 <div className="flex items-center gap-1">
                   <AppButton
@@ -266,13 +428,15 @@ export function NewsPanel() {
                 <h3 className="font-semibold text-white text-sm md:text-base">No news published</h3>
               </div>
               <p className="text-xs md:text-sm text-gray-400">
-                News from the database will appear here.
+                Only you see this. Add news with Edit; users see the bar once there is news.
               </p>
             </div>
+            {editButton}
           </>
         )}
       </div>
     </AppCard>
+    </>
   );
 }
 

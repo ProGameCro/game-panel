@@ -375,6 +375,17 @@ class ApiClient {
     return res.data;
   }
 
+  // the news bar: this panel's own news (written by its Super Admins), not OVHcloud's catalog
+  async getPanelNews() {
+    const response = await this.client.get('/api/news');
+    return response.data as { news: import('./api/types').CatalogNewsItem[] };
+  }
+
+  async savePanelNews(news: Array<{ title: string; description: string; iconKey: string; date: number }>) {
+    const response = await this.client.put('/api/news', { news });
+    return response.data as { news: import('./api/types').CatalogNewsItem[] };
+  }
+
   async getNews(limit?: number) {
     const response = await axios.get(`${CATALOG_BASE_URL}/news`, {
       params: { limit: limit ?? 20 },

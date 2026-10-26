@@ -1,5 +1,5 @@
 """Registers the CoD4 files status: /api/cod4 in the backend, apiClient.getCod4FilesStatus() in the frontend,
-and apiClient.setSuperAdmin() for the Super Admin button in User Administration.
+apiClient.setSuperAdmin() for the Super Admin button in User Administration, and the panel's own news (/api/news).
 Small insertions (these files are also changed by other installers). Safe to run again. Usage: patch_cod4_linux.py <app>"""
 import os, sys
 
@@ -38,6 +38,23 @@ if insert('frontend/utils/api.ts', 'setSuperAdmin', '  async resetUserPassword(u
           "  async setSuperAdmin(userId: number, enabled: boolean) {\n"
           "    const response = await this.client.post(`/api/users/${userId}/super-admin`, { enabled });\n"
           "    return response.data as { success: boolean };\n"
+          "  }\n\n", after=False):
+    changed.add('frontend')
+if insert('backend/src/index.ts', "routes/news.js", "import downloadRoutes from './routes/download.js';\n",
+          "import newsRoutes from './routes/news.js';\n"):
+    changed.add('backend')
+if insert('backend/src/index.ts', "app.use('/api/news'", "app.use('/api/catalog', authMiddleware, catalogRoutes);\n",
+          "// /api/news (the news bar, written by the panel's admins)\napp.use('/api/news', newsRoutes);\n"):
+    changed.add('backend')
+if insert('frontend/utils/api.ts', 'getPanelNews', '  async getNews(limit?: number) {\n',
+          "  // the news bar: this panel's own news (written by its Super Admins), not OVHcloud's catalog\n"
+          "  async getPanelNews() {\n"
+          "    const response = await this.client.get('/api/news');\n"
+          "    return response.data as { news: import('./api/types').CatalogNewsItem[] };\n"
+          "  }\n\n"
+          "  async savePanelNews(news: Array<{ title: string; description: string; iconKey: string; date: number }>) {\n"
+          "    const response = await this.client.put('/api/news', { news });\n"
+          "    return response.data as { news: import('./api/types').CatalogNewsItem[] };\n"
           "  }\n\n", after=False):
     changed.add('frontend')
 print(' '.join(sorted(changed)))
