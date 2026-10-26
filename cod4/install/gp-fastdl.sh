@@ -42,7 +42,18 @@ command -v docker >/dev/null || { echo "Docker nije instaliran"; exit 1; }
 if ss -ltnH "sport = :$PORT" 2>/dev/null | grep -q . && [[ -z "$(docker ps -q -f name=^$NAME$)" ]]; then
   echo "Port $PORT je zauzet. Odaberi drugi: FASTDL_PORT=8090 bash $0"; exit 1
 fi
-mkdir -p "$DIR" "$LIB" "$STATE" "$ETC"
+mkdir -p "$DIR" "$LIB" "$STATE" "$ETC/certs"
+
+# the panel's domain and Traefik: HTTPS for browsers (https://<domain>/fastdl and https on the FastDL port itself,
+# with the panel's Let's Encrypt certificate, which the service keeps up to date)
+DOMAIN="$(grep -E '^DOMAIN=' "$APP_ROOT/deploy/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' ")"
+traefik="$(docker ps -q --filter label=com.docker.compose.project=gamepanel --filter label=com.docker.compose.service=traefik | head -1)"
+EDGE=""; ACME=""
+if [[ -n $traefik ]]; then
+  EDGE="$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$traefik" | awk '{print $1}')"
+  le="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/letsencrypt"}}{{.Source}}{{end}}{{end}}' "$traefik")"
+  [[ -n $le ]] && ACME="$le/acme.json"
+fi
 
 # ---- 1) the sync service ----------------------------------------------------------------------------------------
 cat > "$LIB/gp-fastdl-sync.py" <<'PY'
@@ -162,6 +173,48 @@ def sync_once():
     save_manifest(owned)
     return added, removed, len(want)
 
+# HTTPS on the FastDL port: the panel's certificate from Traefik's acme.json, refreshed when Traefik renews it
+ACME = os.environ.get('FASTDL_ACME', '')
+DOMAIN = os.environ.get('FASTDL_DOMAIN', '')
+CERTS = os.environ.get('FASTDL_CERTS', '/etc/gamepanel-fastdl/certs')
+CONTAINER = os.environ.get('FASTDL_CONTAINER', 'gamepanel-fastdl')
+CERT_EVERY = 600
+_cert_checked = 0.0
+
+def refresh_cert(force=False):
+    global _cert_checked
+    if not ACME or not DOMAIN or (not force and time.time() - _cert_checked < CERT_EVERY):
+        return False
+    _cert_checked = time.time()
+    import base64, subprocess
+    try:
+        data = json.load(open(ACME))
+    except Exception:
+        return False
+    for resolver in data.values():
+        for item in (resolver or {}).get('Certificates') or []:
+            names = [item.get('domain', {}).get('main', '')] + list(item.get('domain', {}).get('sans') or [])
+            if DOMAIN not in names:
+                continue
+            cert, key = base64.b64decode(item['certificate']), base64.b64decode(item['key'])
+            crt_path, key_path = os.path.join(CERTS, 'fastdl.crt'), os.path.join(CERTS, 'fastdl.key')
+            try:
+                if open(crt_path, 'rb').read() == cert:
+                    return False
+            except FileNotFoundError:
+                pass
+            os.makedirs(CERTS, exist_ok=True)
+            for path, content, mode in ((key_path, key, 0o600), (crt_path, cert, 0o644)):
+                tmp = path + '.tmp'
+                with open(tmp, 'wb') as f:
+                    f.write(content)
+                os.chmod(tmp, mode)
+                os.replace(tmp, path)
+            subprocess.run(['docker', 'exec', CONTAINER, 'nginx', '-s', 'reload'], capture_output=True)
+            print('fastdl: HTTPS certificate for %s updated' % DOMAIN, flush=True)
+            return True
+    return False
+
 def write_status(**values):
     tmp = STATUS + '.tmp'
     json.dump(dict(values, time=time.time()), open(tmp, 'w'))
@@ -178,6 +231,10 @@ def main():
                 os.remove(REQUEST)
             except FileNotFoundError:
                 pass
+        try:
+            refresh_cert(force=once)
+        except Exception as e:
+            print('fastdl: certificate update failed: %s' % e, flush=True)
         try:
             added, removed, total = sync_once()
             write_status(ok=True, total=total, added=added, removed=removed)
@@ -206,7 +263,7 @@ Description=Game Panel FastDL sync (CoD4 mods and maps to $DIR)
 After=network.target
 
 [Service]
-Environment=GP_APP_ROOT=$APP_ROOT FASTDL_DIR=$DIR FASTDL_STATE=$STATE
+Environment=GP_APP_ROOT=$APP_ROOT FASTDL_DIR=$DIR FASTDL_STATE=$STATE FASTDL_ACME=$ACME FASTDL_DOMAIN=$DOMAIN FASTDL_CERTS=$ETC/certs FASTDL_CONTAINER=$NAME
 ExecStart=/usr/bin/python3 $LIB/gp-fastdl-sync.py
 Restart=always
 RestartSec=5
@@ -215,38 +272,75 @@ RestartSec=5
 WantedBy=multi-user.target
 UNIT
 echo "== Prva sinkronizacija"
-GP_APP_ROOT=$APP_ROOT FASTDL_DIR=$DIR FASTDL_STATE=$STATE python3 "$LIB/gp-fastdl-sync.py" --once
+GP_APP_ROOT=$APP_ROOT FASTDL_DIR=$DIR FASTDL_STATE=$STATE FASTDL_ACME=$ACME FASTDL_DOMAIN=$DOMAIN FASTDL_CERTS=$ETC/certs \
+  python3 "$LIB/gp-fastdl-sync.py" --once
+# no certificate from Traefik (yet): a self-signed one, so the HTTPS side can start; the service swaps in the real one
+if [[ ! -s $ETC/certs/fastdl.crt ]]; then
+  command -v openssl >/dev/null || { apt-get update -qq && apt-get install -y -qq openssl; }
+  openssl req -x509 -nodes -newkey rsa:2048 -days 3650 -subj "/CN=${DOMAIN:-fastdl}" \
+    -keyout "$ETC/certs/fastdl.key" -out "$ETC/certs/fastdl.crt" >/dev/null 2>&1
+  echo "== HTTPS certifikat iz Traefika nije pronađen, privremeno vlastiti (servis ga zamijeni kad se pojavi)"
+fi
 $SYSTEMCTL daemon-reload
 $SYSTEMCTL enable $NAME >/dev/null 2>&1
 $SYSTEMCTL restart $NAME
 
 # ---- 2) the web server ------------------------------------------------------------------------------------------
+# One port for both: the game speaks plain HTTP, browsers (which insist on HTTPS for the panel's domain, HSTS) speak TLS.
+# The stream part looks at the first bytes and passes TLS to the HTTPS server, the rest to the HTTP server.
+# 8082 is the plain HTTP server for the panel's Traefik (https://<domain>/fastdl/...).
 cat > "$ETC/nginx.conf" <<'NGINX'
-server {
-    listen 80;
-    server_name _;
-    root /usr/share/nginx/html;
-    autoindex off;
+worker_processes auto;
+events { worker_connections 1024; }
+
+stream {
+    map $ssl_preread_protocol $fastdl_backend {
+        ""      127.0.0.1:8081;
+        default 127.0.0.1:8443;
+    }
+    server {
+        listen 80;
+        ssl_preread on;
+        proxy_pass $fastdl_backend;
+    }
+}
+
+http {
+    sendfile on;
     server_tokens off;
-    # only the game files themselves can be downloaded; folders, listings and anything else: 403
-    location / {
-        return 403;
+    access_log off;
+
+    server {
+        listen 127.0.0.1:8081;
+        listen 8082;
+        include /etc/nginx/fastdl-locations.conf;
     }
-    location ~* ^/cod4/[A-Za-z0-9_-]+/(mods|usermaps)/[^/]+/.+\.(ff|iwd)$ {
-        limit_except GET HEAD { deny all; }
-        types { }
-        default_type application/octet-stream;
-        try_files $uri =404;
+    server {
+        listen 127.0.0.1:8443 ssl;
+        ssl_certificate /etc/nginx/certs/fastdl.crt;
+        ssl_certificate_key /etc/nginx/certs/fastdl.key;
+        include /etc/nginx/fastdl-locations.conf;
     }
+}
+NGINX
+cat > "$ETC/fastdl-locations.conf" <<'NGINX'
+root /usr/share/nginx/html;
+autoindex off;
+# only the game files themselves can be downloaded; folders, listings and anything else: 403
+location / {
+    return 403;
+}
+location ~* ^/cod4/[A-Za-z0-9_-]+/(mods|usermaps)/[^/]+/.+\.(ff|iwd)$ {
+    limit_except GET HEAD { deny all; }
+    types { }
+    default_type application/octet-stream;
+    try_files $uri =404;
 }
 NGINX
 docker image inspect $IMAGE >/dev/null 2>&1 || docker pull -q $IMAGE >/dev/null
 docker rm -f $NAME >/dev/null 2>&1 || true
 # HTTPS for browsers too: the panel's Traefik (with its certificate) passes https://<panel domain>/fastdl/... on to the
 # same web server (as /cod4/...). The game keeps using plain HTTP on $PORT.
-DOMAIN="$(grep -E '^DOMAIN=' "$APP_ROOT/deploy/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' ")"
-traefik="$(docker ps -q --filter label=com.docker.compose.project=gamepanel --filter label=com.docker.compose.service=traefik | head -1)"
-EDGE=""; [[ -n $traefik ]] && EDGE="$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$traefik" | awk '{print $1}')"
 labels=()
 if [[ -n $DOMAIN && -n $EDGE ]]; then
   labels=(--label traefik.enable=true
@@ -257,10 +351,11 @@ if [[ -n $DOMAIN && -n $EDGE ]]; then
     --label traefik.http.routers.gamepanel_fastdl.middlewares=gamepanel_fastdl_path
     --label 'traefik.http.middlewares.gamepanel_fastdl_path.replacepathregex.regex=^/fastdl/(.*)'
     --label 'traefik.http.middlewares.gamepanel_fastdl_path.replacepathregex.replacement=/cod4/$1'
-    --label traefik.http.services.gamepanel_fastdl.loadbalancer.server.port=80)
+    --label traefik.http.services.gamepanel_fastdl.loadbalancer.server.port=8082)
 fi
 docker run -d --name $NAME --restart unless-stopped -p "$PORT:80" "${labels[@]}" \
-  -v "$WEB_ROOT:/usr/share/nginx/html:ro" -v "$ETC/nginx.conf:/etc/nginx/conf.d/default.conf:ro" $IMAGE >/dev/null
+  -v "$WEB_ROOT:/usr/share/nginx/html:ro" -v "$ETC/nginx.conf:/etc/nginx/nginx.conf:ro" \
+  -v "$ETC/fastdl-locations.conf:/etc/nginx/fastdl-locations.conf:ro" -v "$ETC/certs:/etc/nginx/certs:ro" $IMAGE >/dev/null
 if [[ ${#labels[@]} -gt 0 ]]; then
   docker network connect "$EDGE" $NAME
   browser_url="https://$DOMAIN/fastdl"
@@ -293,7 +388,8 @@ for d in "$DIR"/*/; do
   echo "  server $k: $url/$k   (mods: $(ls "$d/mods" 2>/dev/null | wc -l), usermaps: $(ls "$d/usermaps" 2>/dev/null | wc -l))"
 done
 echo "Sinkronizacija svakih 10 s (servis $NAME), log: journalctl -u $NAME -f"
-[[ -n $browser_url ]] && echo "U pregledniku (HTTPS): $browser_url/<broj servera>/mods/<mod>/mod.ff  (igra koristi $url/<broj servera>)"
+echo "Isti link radi i u pregledniku (preglednik ga otvori kao https, port $PORT to prihvaća s certifikatom panela)."
+[[ -n $browser_url ]] && echo "Ili bez porta: $browser_url/<broj servera>/mods/<mod>/mod.ff"
 echo
 echo "Uključi ga po serveru u panelu: Settings > Game config > Command line > FastDL > Save, pa restart."
 echo "(Novi CoD4 serveri ga dobiju uključenog već pri instalaciji.)"
