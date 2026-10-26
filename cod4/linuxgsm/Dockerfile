@@ -3,6 +3,7 @@
 # GitHub when a container starts: the cod4server script (made from linuxgsm.sh, like "./linuxgsm.sh cod4server"),
 # its default config, and linuxgsm.sh in lgsm/tmp. check_gamedig.sh no longer runs npm and GitHub at every start.
 # No LinuxGSM advertising in the server log: no sponsor banner, no GitHub lines, no ismygameserver.online link.
+# The container log shows only the CoD4X console (LinuxGSM's own log stays in log/script).
 ARG BASE=gameservermanagers/gameserver:cod4
 FROM ${BASE}
 COPY _default.cfg /app/lgsm/config-default/config-lgsm/cod4server/_default.cfg
@@ -12,6 +13,8 @@ RUN sed -e 's/shortname="core"/shortname="cod4"/' -e 's/gameservername="core"/ga
  && sed -i 's|^\( *\)\./"${GAMESERVER}" sponsor$|\1true|; /# Sponsor to display LinuxGSM logo/d' /app/entrypoint-user.sh \
  && sed -i '/^echo -e "LGSM_GITHUB/d; s|^echo -e "Welcome to the LinuxGSM"$|echo -e "Call of Duty 4 server"|' /app/entrypoint.sh \
  && sed -i 's|^\([[:space:]]*\)echo -e "${lightblue}Query Check:.*$|\1:|' /app/lgsm/modules/info_messages.sh \
+ && sed -i 's|^tail -F "${LGSM_LOGDIR}"/console/\*console.log "${LGSM_LOGDIR}"/script/\*script.log &$|tail -F "${LGSM_LOGDIR}"/console/*console.log \&|' /app/entrypoint-user.sh \
+ && grep -q '^tail -F "${LGSM_LOGDIR}"/console/\*console.log &$' /app/entrypoint-user.sh \
  && ! grep -q 'sponsor$' /app/entrypoint-user.sh && ! grep -q 'echo -e "LGSM_GITHUB' /app/entrypoint.sh \
  && ! grep -q 'Query Check' /app/lgsm/modules/info_messages.sh \
  && bash -n /app/entrypoint.sh && bash -n /app/entrypoint-user.sh && bash -n /app/lgsm/modules/info_messages.sh \
