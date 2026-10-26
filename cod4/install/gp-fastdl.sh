@@ -4,6 +4,7 @@
 #  - Sync: the service gamepanel-fastdl watches every CoD4 server (and /opt/gamepanel/cod4-linux) and keeps the
 #    folder up to date by itself: new or changed .ff / .iwd files appear within seconds, deleted ones disappear.
 #    Only .ff and .iwd files are published (never configs). Big files are hard links (no extra disk space).
+#    Opening the address or a folder in a browser gives 403: only the game files themselves can be downloaded.
 # Usage (as root):
 #   bash gp-fastdl.sh                 install / update (safe to run again)
 #   FASTDL_PORT=8090 bash gp-fastdl.sh   another port
@@ -204,9 +205,13 @@ server {
     root /usr/share/nginx/html;
     autoindex off;
     server_tokens off;
+    # only the game files themselves can be downloaded; folders, listings and anything else: 403
     location / {
+        return 403;
+    }
+    location ~* ^/cod4/(mods|usermaps)/[^/]+/.+\.(ff|iwd)$ {
         limit_except GET HEAD { deny all; }
-        types { application/octet-stream ff iwd; }
+        types { }
         default_type application/octet-stream;
         try_files $uri =404;
     }
