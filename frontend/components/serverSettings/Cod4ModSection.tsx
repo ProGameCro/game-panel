@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Eye, EyeOff, FolderOpen, RefreshCw, Save, Terminal, Wand2 } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, Copy, Eye, EyeOff, FolderOpen, RefreshCw, Save, Terminal, Wand2 } from 'lucide-react';
 import { apiClient } from '../../utils/api';
 import { AppButton, AppInput, AppSelect } from '../../src/ui/components';
 import { RestartToApplyNote } from './RestartToApplyNote';
@@ -542,13 +542,35 @@ export function Cod4ModSection({
             Players download mods and maps over HTTP
           </label>
           {fastdl?.installed ? (
-            <span className={hint}>
+            <>
+            <span className={`${hint} flex flex-wrap items-center gap-2`}>
               {/* the game downloads over plain HTTP; folders give 403, so the files in the list are the links to open */}
-              <span className="font-mono">{fastdl.url}</span>{' '}
-              <button type="button" className="underline" onClick={() => void copyFastdl()} title="Copy the link the game uses">
-                {copied ? 'copied' : 'copy'}
+              <code className={`rounded border ${borderColor} bg-black/20 px-2 py-1 font-mono text-xs ${textPrimary}`}>{fastdl.url}</code>
+              <button
+                type="button"
+                onClick={() => void copyFastdl()}
+                title="Copy the link the game uses"
+                className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                  copied
+                    ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                    : `${borderColor} ${textPrimary} hover:border-[var(--color-cyan-400)] hover:text-[var(--color-cyan-400)]`
+                }`}
+              >
+                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? 'Copied' : 'Copy'}
               </button>
-              {' · '}
+              <button
+                type="button"
+                onClick={() => void syncFastdl()}
+                disabled={fastdlSyncing}
+                title="Publish this server's mods and maps now (the service also does it every 10 seconds)"
+                className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-60 ${borderColor} ${textPrimary} hover:border-[var(--color-cyan-400)] hover:text-[var(--color-cyan-400)]`}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${fastdlSyncing ? 'animate-spin' : ''}`} />
+                {fastdlSyncing ? 'Syncing…' : 'Sync now'}
+              </button>
+            </span>
+            <span className={hint}>
               <span className={fastdl.running ? 'text-emerald-400' : 'text-red-400'}>
                 {fastdl.running ? 'web server running' : 'web server not running (bash gp-fastdl.sh)'}
               </span>
@@ -557,18 +579,8 @@ export function Cod4ModSection({
                 {fastdl.files.filter((f) => f.published).length} of {fastdl.files.length} files of this server published
               </button>
               {fastdl.lastSync ? ` · last sync ${new Date(fastdl.lastSync).toLocaleTimeString()}` : ''}
-              {' · '}
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 underline disabled:opacity-50"
-                onClick={() => void syncFastdl()}
-                disabled={fastdlSyncing}
-                title="Publish this server's mods and maps now (the service also does it every 10 seconds)"
-              >
-                <RefreshCw className={`h-3 w-3 ${fastdlSyncing ? 'animate-spin' : ''}`} />
-                {fastdlSyncing ? 'syncing…' : 'Sync now'}
-              </button>
             </span>
+            </>
           ) : (
             <span className={hint}>FastDL is not installed: run gp-fastdl.sh on the panel server.</span>
           )}
