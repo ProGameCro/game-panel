@@ -9,7 +9,7 @@ import { docker } from '../utils/docker/client.js';
 import { getServerStoragePaths } from '../utils/storage.js';
 import { parsePositiveIntId } from '../utils/ids.js';
 import { readAdminSettings } from '../services/cod4/settings.js';
-import { getReinstallStatus, startCod4Reinstall } from '../services/cod4/reinstall.js';
+import { getReinstallStatus, reinstallKindOf, startCod4Reinstall } from '../services/cod4/reinstall.js';
 import { serverRepository } from '../database/index.js';
 
 // Call of Duty 4: are the game files (cod4-linux folder) and the local image ready? Shown in the install form.
@@ -119,7 +119,7 @@ router.post(
     }
 );
 
-// Reinstall: the game files made again from the cod4-linux folder (the server must be stopped), in the background.
+// Reinstall (any game; CoD4 from the cod4-linux folder): the server must be stopped, it runs in the background.
 // { keepContent: true } keeps the mods and custom maps. Owners of a server may do it (soft wipe permission).
 // GET gives its progress (step, files done / total) and whether it is done.
 router.post(
@@ -147,7 +147,9 @@ router.get(
     async (req: AuthenticatedRequest, res: Response) => {
         const serverId = parsePositiveIntId(req.params.id);
         if (!serverId) return res.status(400).json({ error: 'Invalid server id' });
-        return res.json({ status: getReinstallStatus(serverId) });
+        const server = await serverRepository.findById(serverId);
+        if (!server) return res.status(404).json({ error: 'Server not found' });
+        return res.json({ status: getReinstallStatus(serverId), kind: reinstallKindOf(server) });
     }
 );
 

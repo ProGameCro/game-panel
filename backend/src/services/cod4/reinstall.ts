@@ -5,15 +5,22 @@ import * as dockerUtils from '../../utils/docker.js';
 import { getServerStoragePaths } from '../../utils/storage.js';
 import { logError, logInfo } from '../../utils/logger.js';
 import { actionsRepository } from '../../database/index.js';
+import { getServerWipeModes, hardWipeServer } from '../serverWipe.js';
 import { assertCod4FilesReady, cod4FilesDir, prepareCod4ServerFiles, type LinkCount } from '../../providers/linuxgsm/adapters/cod4/index.js';
 
+// Reinstall of a server's game files (any game; CoD4 below, the others in runGenericReinstall).
 // Reinstall of a CoD4 server's game files (server Settings > Game config > Reinstall, or Reinstall in the server list),
 // for when something got broken: serverfiles is made again from the cod4-linux folder like for a new server (CoD4X,
 // main, zone, starting server.cfg). Kept: the command line (RCON password, slots, FastDL, mod: config-lgsm), B3,
 // backups and the FTP account; the mods and custom maps too unless the user asks to delete them. The server must be
 // stopped. It runs in the background (copying a few GB can take minutes); the panel follows it with the status below.
 
+// cod4: from the cod4-linux folder; linuxgsm: serverfiles emptied, LinuxGSM downloads the game again on the next start;
+// ovhcloud: the game's own reinstall (hard wipe), the server installs and starts again by itself
+export type ReinstallKind = 'cod4' | 'linuxgsm' | 'ovhcloud';
+
 export type ReinstallStatus = {
+    kind: ReinstallKind;
     state: 'running' | 'done' | 'error';
     step: 'checking' | 'removing' | 'copying' | 'config' | 'restoring' | 'done';
     done: number;
@@ -29,15 +36,19 @@ function fail(message: string, statusCode: number): Error {
     return Object.assign(new Error(message), { statusCode });
 }
 
-function gameServerNameOf(server: GameServerRow): string {
+function metaOf(server: GameServerRow): { shortname?: string; gameservername?: string } {
     try {
-        const meta = JSON.parse(server.provider_metadata_json ?? '{}') as { shortname?: string; gameservername?: string };
-        if (String(meta.shortname ?? '').toLowerCase() !== 'cod4') throw fail('Reinstall is only for Call of Duty 4 servers', 400);
-        return String(meta.gameservername || 'cod4server');
-    } catch (error) {
-        if ((error as { statusCode?: number }).statusCode) throw error;
-        throw fail('Reinstall is only for Call of Duty 4 servers', 400);
+        return JSON.parse(server.provider_metadata_json ?? '{}') as { shortname?: string; gameservername?: string };
+    } catch {
+        return {};
     }
+}
+
+// how this server is reinstalled, or null when it cannot be (custom Docker images)
+export function reinstallKindOf(server: GameServerRow): ReinstallKind | null {
+    if (server.provider === 'linuxgsm') return String(metaOf(server).shortname ?? '').toLowerCase() === 'cod4' ? 'cod4' : 'linuxgsm';
+    if (server.provider === 'ovhcloud') return getServerWipeModes(server).includes('hard') ? 'ovhcloud' : null;
+    return null;
 }
 
 // the files a new server gets from the cod4-linux folder (no logs), for the progress bar
@@ -62,20 +73,21 @@ export function getReinstallStatus(serverId: number): ReinstallStatus | null {
 
 // checks, then starts the reinstall in the background
 export async function startCod4Reinstall(server: GameServerRow, keepContent: boolean, actor: string): Promise<ReinstallStatus> {
-    if (server.provider !== 'linuxgsm') throw fail('Reinstall is only for Call of Duty 4 servers', 400);
-    const gameServerName = gameServerNameOf(server);
+    const kind = reinstallKindOf(server);
+    if (!kind) throw fail('This server cannot be reinstalled from the panel (custom Docker image).', 400);
     if (statuses.get(server.id)?.state === 'running') throw fail('A reinstall of this server is already running', 409);
     if (server.docker_container_id && (await dockerUtils.checkContainerStatus(server.docker_container_id)) === 'running') {
         throw fail('Stop the server first, then reinstall.', 409);
     }
     // before anything is deleted: the cod4-linux folder and the image must be there
-    await assertCod4FilesReady();
+    if (kind === 'cod4') await assertCod4FilesReady();
 
     const status: ReinstallStatus = {
+        kind,
         state: 'running',
         step: 'checking',
         done: 0,
-        total: await countFiles(cod4FilesDir()),
+        total: kind === 'cod4' ? await countFiles(cod4FilesDir()) : 0,
         keepContent,
         kept: [],
         startedAt: Date.now(),
@@ -83,8 +95,37 @@ export async function startCod4Reinstall(server: GameServerRow, keepContent: boo
         error: null,
     };
     statuses.set(server.id, status);
-    void runReinstall(server, gameServerName, status, actor);
+    if (kind === 'cod4') void runReinstall(server, String(metaOf(server).gameservername || 'cod4server'), status, actor);
+    else void runGenericReinstall(server, kind, status, actor);
     return status;
+}
+
+// other games: LinuxGSM installs the game again when the container starts with an empty serverfiles (its entrypoint);
+// OVHcloud images have their own reinstall (hard wipe), which also starts the install
+async function runGenericReinstall(server: GameServerRow, kind: ReinstallKind, status: ReinstallStatus, actor: string): Promise<void> {
+    try {
+        status.step = 'removing';
+        if (kind === 'ovhcloud') {
+            await hardWipeServer(server as GameServerRow & { docker_container_id: string }, actor);
+        } else {
+            // the folder itself stays (the container's mount), only what is in it goes
+            const serverfiles = path.join(getServerStoragePaths(server.id).dataDir, 'serverfiles');
+            for (const name of await fs.readdir(serverfiles).catch(() => [] as string[])) {
+                await fs.rm(path.join(serverfiles, name), { recursive: true, force: true });
+            }
+            await fs.mkdir(serverfiles, { recursive: true });
+        }
+        Object.assign(status, { state: 'done', step: 'done', finishedAt: Date.now() });
+        logInfo('SERVERS:REINSTALL', kind === 'ovhcloud' ? 'Reinstall started (hard wipe)' : 'Game files removed: LinuxGSM installs the game on the next start', {
+            serverId: server.id,
+        });
+        await actionsRepository
+            .create(server.id, 'success', kind === 'ovhcloud' ? 'Server reinstall started' : 'Game files removed for a reinstall', actor)
+            .catch(() => undefined);
+    } catch (error) {
+        Object.assign(status, { state: 'error', finishedAt: Date.now(), error: error instanceof Error ? error.message : String(error) });
+        logError('SERVERS:REINSTALL', error, { serverId: server.id });
+    }
 }
 
 async function runReinstall(server: GameServerRow, gameServerName: string, status: ReinstallStatus, actor: string): Promise<void> {

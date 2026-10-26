@@ -14,6 +14,7 @@ import { apiClient } from '../../utils/api';
 import { LogPromptToasts } from '../LogPromptToasts';
 import { ConfirmationModal } from '../ConfirmationModal';
 import { ChangePasswordModal } from '../ChangePasswordModal';
+import { ServerTaskPopup } from './ServerTaskPopup';
 import { AppPageLayout } from '../../src/ui/layout';
 
 const HostStatus = lazy(() => import('../HostStatus').then((m) => ({ default: m.HostStatus })));
@@ -375,6 +376,7 @@ export function AppShell({
         icon="danger"
       />
 
+      <ServerTaskPopup />
       <ChangePasswordModal
         isOpen={changePasswordOpen}
         onClose={() => setChangePasswordOpen(false)}

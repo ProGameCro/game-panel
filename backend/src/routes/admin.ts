@@ -16,6 +16,7 @@ import { backupServerConfigs, deleteBackup, listBackups, runAutoBackup, startAut
 import { checkCod4Files, cod4FilesDir, cod4FilesHostDir } from '../providers/linuxgsm/adapters/cod4/index.js';
 import { certificateInfo } from '../services/cod4/cert.js';
 import { writeBranding } from './branding.js';
+import { deleteGameIcon, saveGameIcon } from '../services/gameIcons.js';
 import { ensureFtpAccount, deleteFtpAccount, ftpRunning, kickFtpConnection, listFtpAccounts, listFtpConnections, readFtpConfig, readFtpEvents } from '../services/ftp.js';
 
 // Admin page (Super Admins): everything the panel can tell about the servers' add-ons (B3, FastDL), the host and what
@@ -1171,6 +1172,27 @@ router.get('/owners', async (_req: AuthenticatedRequest, res: Response) => {
         return res.json({ owners });
     } catch (error) {
         return fail(res, error, 'Could not read the owners');
+    }
+});
+
+// ---- game icons (left of the server names)
+router.put('/game-icons/:key', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        await saveGameIcon(String(req.params.key), req.body?.dataUrl);
+        res.locals.activityDetail = `game icon ${req.params.key}`;
+        return res.json({ success: true });
+    } catch (error) {
+        return fail(res, error, 'Could not save the icon');
+    }
+});
+
+router.delete('/game-icons/:key', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        await deleteGameIcon(String(req.params.key));
+        res.locals.activityDetail = `game icon ${req.params.key} removed`;
+        return res.json({ success: true });
+    } catch (error) {
+        return fail(res, error, 'Could not remove the icon');
     }
 });
 

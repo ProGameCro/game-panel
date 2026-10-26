@@ -35,6 +35,7 @@ import { AdminServerCfg } from './AdminServerCfg';
 import { AdminBackups } from './AdminBackups';
 import { AdminCod4Files } from './AdminCod4Files';
 import { AdminFtp } from './AdminFtp';
+import { AdminGameIcons } from './AdminGameIcons';
 import { ServerPicker, type Cod4Choice } from './shared';
 
 // Admin page (Super Admins): every server at a glance with group actions, what needs attention, FastDL, the host,
@@ -579,7 +580,7 @@ export function AdminPage({ gameServers, serversPlayersById, gameNamesByKey, han
       {tab === 'cod4files' && <AdminCod4Files />}
       {tab === 'ftp' && <AdminFtp />}
       {tab === 'activity' && <AdminActivity />}
-      {tab === 'panel' && <PanelSettings setActiveTab={setActiveTab} />}
+      {tab === 'panel' && <PanelSettings setActiveTab={setActiveTab} gameServers={gameServers} gameNamesByKey={gameNamesByKey} />}
 
       <ConfirmationModal
         isOpen={bulk !== null}
@@ -594,7 +595,15 @@ export function AdminPage({ gameServers, serversPlayersById, gameNamesByKey, han
   );
 }
 
-function PanelSettings({ setActiveTab }: { setActiveTab: (tab: string) => void }) {
+function PanelSettings({
+  setActiveTab,
+  gameServers,
+  gameNamesByKey,
+}: {
+  setActiveTab: (tab: string) => void;
+  gameServers: GameServer[];
+  gameNamesByKey: Record<string, string>;
+}) {
   const { name, saveName, defaultTheme, loginFooter, setAppearance } = usePanelName();
   const [themeDraft, setThemeDraft] = useState<PanelTheme>(defaultTheme);
   const [footerDraft, setFooterDraft] = useState(loginFooter);
@@ -739,6 +748,7 @@ function PanelSettings({ setActiveTab }: { setActiveTab: (tab: string) => void }
           <code>bash gp-fastdl.sh</code> (FastDL), <code>bash gp-b3.sh</code> (B3), <code>bash gp-ftp.sh</code> (FTP).
         </p>
       </AppCard>
+      <AdminGameIcons gameServers={gameServers} gameNamesByKey={gameNamesByKey} />
     </div>
   );
 }

@@ -25,7 +25,7 @@ import {
 import { canOpenServerSettings, formatNetworkSpeed, formatPlayerCount, hasServerPermission, playersHaveNames, type MetricType } from './utils';
 import { getServerStatusPresentation } from './utils';
 import { ODS_CHART_THEME } from '../charts/theme';
-import { GameIcon, isCod4 } from './GameIcon';
+import { GameIcon, canBeReinstalled } from './GameIcon';
 import { Cod4ReinstallDialog } from '../serverSettings/Cod4ReinstallSection';
 import { ownerText, useServerOwners } from './useServerOwners';
 import { AppButton } from '../../src/ui/components';
@@ -470,7 +470,7 @@ export function GameServerCard({
       </div>
 
       <div className="flex gap-2">
-        {isCod4(server) && canReinstall && (
+        {canBeReinstalled(server) && canReinstall && (
           <AppButton
             onClick={() => setReinstallOpen(true)}
             aria-label="Reinstall server"
@@ -479,7 +479,7 @@ export function GameServerCard({
             <Wrench className="w-4 h-4" /> Reinstall
           </AppButton>
         )}
-        {(canDeleteServer || !isCod4(server)) && (
+        {(canDeleteServer || !canBeReinstalled(server)) && (
         <AppButton
           disabled={!canDeleteServer}
           onClick={() => onConfirmAction(server.id, server.name, 'delete')}

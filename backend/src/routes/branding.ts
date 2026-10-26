@@ -5,6 +5,7 @@ import { getConfig } from '../config.js';
 import { authMiddleware, rootOnly, type AuthenticatedRequest } from '../middleware/auth.js';
 import { requireBodyObject } from '../utils/httpValidation.js';
 import { sendRouteError } from '../utils/routeErrors.js';
+import { listGameIcons, readGameIcon } from '../services/gameIcons.js';
 
 // Panel look, set by a Super Admin, in the panel's data folder (branding.json), so it survives rebuilds and updates.
 // Reading it needs no login (login page):
@@ -64,6 +65,20 @@ export async function writeBranding(patch: Record<string, unknown>): Promise<Bra
     await fs.rename(`${file}.tmp`, file);
     return next;
 }
+
+// GET /api/branding/game-icons: the games that have their own icon (Admin > Panel > Game icons)
+router.get('/game-icons', async (_req, res: Response) => {
+    res.json({ icons: await listGameIcons() });
+});
+
+router.get('/game-icons/:key', async (req, res: Response) => {
+    const icon = await readGameIcon(String(req.params.key));
+    if (!icon) return res.status(404).end();
+    res.setHeader('Content-Type', icon.type);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.send(icon.data);
+});
 
 // GET /api/branding
 router.get('/', async (_req, res: Response) => {

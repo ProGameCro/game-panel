@@ -21,7 +21,7 @@ FILES = {
                 'src/utils/serverVisibility.ts', 'src/services/serverOwner.ts', 'src/routes/servers/read.ts',
                 'src/routes/servers/metrics.ts', 'src/routes/servers/install.ts', 'src/websocket/subscriptions.ts',
                 'src/websocket/broadcaster.ts', 'src/websocket/pollers/serverMetricsPoller.ts',
-                'src/services/cod4/reinstall.ts'],
+                'src/services/cod4/reinstall.ts', 'src/services/gameIcons.ts'],
     'frontend': ['components/InstallGameServer.tsx', 'components/serverSettings/Cod4ModSection.tsx',
                  'components/UserAdministration.tsx', 'components/userAdministration/UsersPanel.tsx',
                  'components/NewsPanel.tsx', 'components/admin/AdminPage.tsx', 'components/admin/shared.tsx',
@@ -31,7 +31,8 @@ FILES = {
                  'components/serverSettings/FtpSection.tsx', 'components/serverSettings/B3Section.tsx', 'components/OwnerPicker.tsx',
                  'components/serverSettings/Cod4ReinstallSection.tsx', 'components/serverSettings/ServerSettingsModalLayout.tsx',
                  'components/gameServersTable/useServerOwners.ts', 'components/gameServersTable/GameServersGrid.tsx',
-                 'components/gameServersTable/GameServersMobileList.tsx', 'utils/adminApi.ts',
+                 'components/gameServersTable/GameServersMobileList.tsx', 'components/admin/AdminGameIcons.tsx',
+                 'components/app/ServerTaskPopup.tsx', 'components/app/appActionHandlers.ts', 'utils/adminApi.ts',
                  'components/gameServersTable/GameIcon.tsx', 'components/gameServersTable/GameServerCard.tsx',
                  'components/gameServersTable/GameServersDesktopTable.tsx', 'index.html', 'public/favicon.svg',
                  # theme and panel name (formerly gp-neon-theme.sh)

@@ -41,7 +41,7 @@ import {
   getServerStatusPresentation,
   hasServerPermission,
 } from './utils';
-import { GameIcon, isCod4 } from './GameIcon';
+import { GameIcon, canBeReinstalled } from './GameIcon';
 import { Cod4ReinstallDialog } from '../serverSettings/Cod4ReinstallSection';
 import { ownerText, useServerOwners } from './useServerOwners';
 import { ODS_CHART_THEME } from '../charts/theme';
@@ -724,7 +724,7 @@ export function GameServersDesktopTable({
                 <td className="py-4 px-4 text-center">
                   <span className="inline-flex items-center gap-1">
                   {/* CoD4: reinstall the game files (owners may; Super Admins too, next to Delete) */}
-                  {isCod4(server) && hasServerPermission(currentUser, permissionsByServer, server.id, 'server.wipe.soft') && (
+                  {canBeReinstalled(server) && hasServerPermission(currentUser, permissionsByServer, server.id, 'server.wipe.soft') && (
                     <AppButton
                       tone="ghost"
                       title="Reinstall"
@@ -735,7 +735,7 @@ export function GameServersDesktopTable({
                       <Wrench className="w-4 h-4" />
                     </AppButton>
                   )}
-                  {(canDeleteServer || !isCod4(server)) && (
+                  {(canDeleteServer || !canBeReinstalled(server)) && (
                   <AppButton
                     tone="ghost"
                     disabled={!canDeleteServer}

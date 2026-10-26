@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
+import { finishServerTask, showServerTask } from './ServerTaskPopup';
 import type { CLIMessage } from '../../types/cli';
 import type { GameServer } from '../../types/gameServer';
 import { apiClient } from '../../utils/api';
@@ -51,12 +52,17 @@ export const createDeleteServerHandler =
       addCLIMessage('error', "You don't have permission to delete this server", server?.name);
       return;
     }
+    // a window while it works: stopping the server and removing its files takes a moment
+    showServerTask(`Deleting ${server?.name ?? 'the server'}`, 'Stopping the server and removing its files…');
     try {
       await apiClient.deleteServer(parseInt(id, 10));
       removeServerFromUi(id);
       addCLIMessage('success', `${server?.name} was deleted`, server?.name, 'delete');
+      finishServerTask(true, `${server?.name ?? 'The server'} was deleted.`);
     } catch (error: any) {
-      addCLIMessage('error', error.response?.data?.error || 'Failed to delete server', server?.name);
+      const message = error.response?.data?.error || 'Failed to delete server';
+      addCLIMessage('error', message, server?.name);
+      finishServerTask(false, message);
     }
   };
 

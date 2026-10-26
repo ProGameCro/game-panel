@@ -7,7 +7,10 @@ import { ConfirmationModal } from '../ConfirmationModal';
 // Reinstall of a CoD4 server's game files, for when something got broken (CoD4X, main, zone, server.cfg):
 // a card in server Settings > Game config, and the same in a window from the server list.
 
+export type ReinstallKind = 'cod4' | 'linuxgsm' | 'ovhcloud';
+
 export type Cod4ReinstallStatus = {
+  kind?: ReinstallKind;
   state: 'running' | 'done' | 'error';
   step: 'checking' | 'removing' | 'copying' | 'config' | 'restoring' | 'done';
   done: number;
@@ -58,6 +61,8 @@ function Cod4ReinstallBody({ serverId, serverStatus, textSecondary }: { serverId
   const [error, setError] = useState<string | null>(null);
   const [start, setStart] = useState<'idle' | 'starting' | 'started'>('idle');
   const [stopping, setStopping] = useState(false);
+  // how this server is reinstalled (undefined while loading, null: not possible)
+  const [kind, setKind] = useState<ReinstallKind | null | undefined>(undefined);
   const isRunning = ['running', 'starting', 'restarting'].includes(String(serverStatus ?? '').toLowerCase());
   const working = status?.state === 'running';
 
@@ -66,7 +71,11 @@ function Cod4ReinstallBody({ serverId, serverStatus, textSecondary }: { serverId
     let alive = true;
     void apiClient
       .cod4ReinstallStatus(serverId)
-      .then((res) => alive && res.status?.state === 'running' && setStatus(res.status))
+      .then((res) => {
+        if (!alive) return;
+        setKind((res as { kind?: ReinstallKind | null }).kind ?? null);
+        if (res.status?.state === 'running') setStatus(res.status);
+      })
       .catch(() => undefined);
     return () => {
       alive = false;
@@ -90,17 +99,29 @@ function Cod4ReinstallBody({ serverId, serverStatus, textSecondary }: { serverId
   return (
     <>
       <p className={`mt-1 text-sm ${textSecondary}`}>
-        Something broken? This puts the game files back as on a new server: CoD4X, main, zone and a fresh server.cfg. The command line (RCON
-        password, slots, FastDL), B3, backups and FTP stay.
+        {kind === undefined && 'Loading…'}
+        {kind === null && 'This server cannot be reinstalled from the panel (custom Docker image).'}
+        {kind === 'cod4' &&
+          'Something broken? This puts the game files back as on a new server: CoD4X, main, zone and a fresh server.cfg. The command line (RCON password, slots, FastDL), B3, backups and FTP stay.'}
+        {kind === 'linuxgsm' &&
+          'Something broken? This deletes the game files (serverfiles) and LinuxGSM downloads and installs the game again when the server starts (a few minutes, follow Log/Console). Everything in serverfiles goes, also configs, mods, maps and saves: download what you want to keep first (File Manager, FTP or Backups). The LinuxGSM settings stay.'}
+        {kind === 'ovhcloud' &&
+          'Something broken? This deletes everything of the server, also saves and worlds, and installs it again; it starts by itself when the install is done. Download what you want to keep first (File Manager or Backups).'}
       </p>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <label className={`flex items-center gap-2 text-sm ${textSecondary}`}>
-          <input type="checkbox" checked={keepContent} disabled={working} onChange={(e) => setKeepContent(e.target.checked)} />
-          Keep my mods and custom maps (mods/, usermaps/)
-        </label>
-        <PowerButton kind="reinstall" busy={working} disabled={isRunning} onClick={() => setConfirm(true)} />
-      </div>
-      {isRunning && !working && (
+      {kind && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          {kind === 'cod4' ? (
+            <label className={`flex items-center gap-2 text-sm ${textSecondary}`}>
+              <input type="checkbox" checked={keepContent} disabled={working} onChange={(e) => setKeepContent(e.target.checked)} />
+              Keep my mods and custom maps (mods/, usermaps/)
+            </label>
+          ) : (
+            <span />
+          )}
+          <PowerButton kind="reinstall" busy={working} disabled={isRunning} onClick={() => setConfirm(true)} />
+        </div>
+      )}
+      {kind && isRunning && !working && (
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-amber-300">The server is running: stop it first.</p>
           <PowerButton
@@ -141,10 +162,14 @@ function Cod4ReinstallBody({ serverId, serverStatus, textSecondary }: { serverId
           {status.state === 'done' && (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="flex items-center gap-2 text-sm text-emerald-300">
-                <CheckCircle2 className="h-4 w-4" /> Reinstall finished in {seconds} s
-                {status.kept.length > 0 ? ' (mods and maps kept)' : ''}.
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                {(status.kind ?? kind) === 'linuxgsm'
+                  ? 'Game files removed. Start the server: LinuxGSM downloads and installs the game (follow Log/Console).'
+                  : (status.kind ?? kind) === 'ovhcloud'
+                    ? 'The reinstall has started: the server installs again and starts by itself (follow Log/Console).'
+                    : `Reinstall finished in ${seconds} s${status.kept.length > 0 ? ' (mods and maps kept)' : ''}.`}
               </p>
-              {start === 'started' ? (
+              {(status.kind ?? kind) === 'ovhcloud' ? null : start === 'started' ? (
                 <span className="text-sm text-emerald-300">Server is starting.</span>
               ) : (
                 <PowerButton
@@ -185,9 +210,13 @@ function Cod4ReinstallBody({ serverId, serverStatus, textSecondary }: { serverId
         }}
         title="Reinstall the server"
         message={
-          keepContent
-            ? 'Put the game files back as new? server.cfg and every other file in the server folder are replaced; mods/ and usermaps/ stay.'
-            : 'Put the game files back as new? Everything in the server folder is deleted, also mods/ and usermaps/.'
+          kind === 'linuxgsm'
+            ? 'Delete the game files (serverfiles) and install the game again on the next start? Configs, mods, maps and saves in serverfiles are deleted.'
+            : kind === 'ovhcloud'
+              ? 'Delete everything of this server (also saves and worlds) and install it again?'
+              : keepContent
+                ? 'Put the game files back as new? server.cfg and every other file in the server folder are replaced; mods/ and usermaps/ stay.'
+                : 'Put the game files back as new? Everything in the server folder is deleted, also mods/ and usermaps/.'
         }
         confirmText="Reinstall"
         icon="danger"
