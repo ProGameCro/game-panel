@@ -4,7 +4,7 @@ import {
   Copy,
   Edit2,
   Play,
-  RotateCcw,
+  Wrench,
   RotateCw,
   Settings,
   Square,
@@ -476,7 +476,7 @@ export function GameServerCard({
             aria-label="Reinstall server"
             className="flex items-center gap-1.5 px-4 py-2 rounded text-sm transition-colors border border-amber-500/40 text-amber-300 hover:bg-amber-500/15"
           >
-            <RotateCcw className="w-4 h-4" /> Reinstall
+            <Wrench className="w-4 h-4" /> Reinstall
           </AppButton>
         )}
         {(canDeleteServer || !isCod4(server)) && (

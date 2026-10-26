@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle2, Play, RotateCcw, Square, X } from 'lucide-react';
+import { CheckCircle2, Play, Wrench, Square, X } from 'lucide-react';
 import { apiClient } from '../../utils/api';
-import { AppButton } from '../../src/ui/components';
 import { ConfirmationModal } from '../ConfirmationModal';
 
 // Reinstall of a CoD4 server's game files, for when something got broken (CoD4X, main, zone, server.cfg):
@@ -29,22 +28,25 @@ const STEP_TEXT: Record<Cod4ReinstallStatus['step'], string> = {
   done: 'Done',
 };
 
-// Start / Stop in the window: solid, coloured like the server list's power buttons
-function PowerButton({ kind, busy, onClick }: { kind: 'start' | 'stop'; busy: boolean; onClick: () => void }) {
-  const start = kind === 'start';
+// Reinstall / Start / Stop: solid, coloured like the server list's power buttons
+const ACTION_STYLE = {
+  start: { icon: Play, label: 'Start server', busy: 'Starting…', cls: 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200' },
+  stop: { icon: Square, label: 'Stop server', busy: 'Stopping…', cls: 'border-red-500/60 bg-red-500/15 text-red-300 hover:bg-red-500/25 hover:text-red-200' },
+  reinstall: { icon: Wrench, label: 'Reinstall', busy: 'Reinstalling…', cls: 'border-amber-500/60 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 hover:text-amber-200' },
+} as const;
+
+function PowerButton({ kind, busy, disabled, onClick }: { kind: keyof typeof ACTION_STYLE; busy: boolean; disabled?: boolean; onClick: () => void }) {
+  const style = ACTION_STYLE[kind];
+  const Icon = style.icon;
   return (
     <button
       type="button"
-      disabled={busy}
+      disabled={busy || disabled}
       onClick={onClick}
-      className={`inline-flex min-w-[9rem] items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-wait disabled:opacity-70 ${
-        start
-          ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200'
-          : 'border-red-500/60 bg-red-500/15 text-red-300 hover:bg-red-500/25 hover:text-red-200'
-      }`}
+      className={`inline-flex min-w-[9rem] items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${style.cls}`}
     >
-      {start ? <Play className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-      {busy ? (start ? 'Starting…' : 'Stopping…') : start ? 'Start server' : 'Stop server'}
+      <Icon className={`h-4 w-4 ${busy && kind === 'reinstall' ? 'animate-pulse' : ''}`} />
+      {busy ? style.busy : style.label}
     </button>
   );
 }
@@ -96,11 +98,7 @@ function Cod4ReinstallBody({ serverId, serverStatus, textSecondary }: { serverId
           <input type="checkbox" checked={keepContent} disabled={working} onChange={(e) => setKeepContent(e.target.checked)} />
           Keep my mods and custom maps (mods/, usermaps/)
         </label>
-        <AppButton tone="ghost" disabled={working || isRunning} onClick={() => setConfirm(true)}>
-          <span className="inline-flex items-center gap-2 text-red-300">
-            <RotateCcw className={`h-4 w-4 ${working ? 'animate-spin' : ''}`} /> {working ? 'Reinstalling…' : 'Reinstall'}
-          </span>
-        </AppButton>
+        <PowerButton kind="reinstall" busy={working} disabled={isRunning} onClick={() => setConfirm(true)} />
       </div>
       {isRunning && !working && (
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
@@ -217,7 +215,7 @@ export function Cod4ReinstallSection({
   return (
     <section className={`mb-4 rounded-xl border ${borderColor} ${contentBg} p-4 sm:p-5`}>
       <h3 className={`flex items-center gap-2 text-base font-semibold ${textPrimary}`}>
-        <RotateCcw className="h-4 w-4 text-sky-300" /> Reinstall
+        <Wrench className="h-4 w-4 text-sky-300" /> Reinstall
       </h3>
       <Cod4ReinstallBody serverId={serverId} serverStatus={serverStatus} textSecondary={textSecondary} />
     </section>
@@ -242,18 +240,18 @@ export function Cod4ReinstallDialog({
         role="dialog"
         aria-modal="true"
         aria-label={`Reinstall ${serverName}`}
-        className="gp-app-card w-full max-w-xl rounded-xl border border-gray-700 bg-[#0b1324] p-5 text-left shadow-2xl"
+        className="gp-themed-dialog w-full max-w-xl rounded-xl border border-gray-200 bg-white p-5 text-left text-gray-900 shadow-2xl dark:border-[#27364d] dark:bg-[#0f172a] dark:text-white"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-white">
-            <RotateCcw className="h-4 w-4 text-sky-300" /> Reinstall · {serverName}
+          <h3 className="flex items-center gap-2 text-base font-semibold">
+            <Wrench className="h-4 w-4 text-sky-300" /> Reinstall · {serverName}
           </h3>
           <button type="button" className="rounded p-1 text-gray-400 hover:text-white" onClick={onClose} aria-label="Close">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <Cod4ReinstallBody serverId={serverId} serverStatus={serverStatus} textSecondary="text-gray-300" />
+        <Cod4ReinstallBody serverId={serverId} serverStatus={serverStatus} textSecondary="text-gray-600 dark:text-gray-300" />
       </div>
     </div>,
     document.body

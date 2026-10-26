@@ -10,7 +10,7 @@ import {
   ArrowUpDown,
   Play,
   Plus,
-  RotateCcw,
+  Wrench,
   RotateCw,
   Settings,
   SlidersHorizontal,
@@ -732,7 +732,7 @@ export function GameServersDesktopTable({
                       onClick={() => setReinstallFor({ id: Number(server.id), name: server.name, status: server.status })}
                       className="rounded-lg border-none bg-transparent p-2 text-amber-300 transition-colors hover:bg-amber-500/15 hover:text-amber-200"
                     >
-                      <RotateCcw className="w-4 h-4" />
+                      <Wrench className="w-4 h-4" />
                     </AppButton>
                   )}
                   {(canDeleteServer || !isCod4(server)) && (
