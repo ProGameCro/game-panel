@@ -30,7 +30,9 @@ export interface Cod4ModSectionProps {
 }
 
 type Assets = { material: string; xanim: string; xmodel: string };
-export type Cod4CommandLine = { mod: string; auth: boolean; assets: Assets; custom: boolean; rcon: string };
+// fastdl: the FastDL base URL (gp-fastdl.sh) when players download mods and maps over HTTP, '' when off
+export type Cod4CommandLine = { mod: string; auth: boolean; assets: Assets; custom: boolean; rcon: string; fastdl?: string };
+const FASTDL_DVARS = ['sv_allowDownload', 'sv_wwwDownload', 'sv_wwwBaseURL', 'sv_wwwDlDisconnected'];
 
 const MOD_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const TOKEN_PATTERN = /^[A-Za-z0-9._-]{8,128}$/;
@@ -78,13 +80,16 @@ export const parseCommandLine = (parameters: string): Cod4CommandLine => {
     assets: { material: asset('material'), xanim: asset('xanim'), xmodel: asset('xmodel') },
     custom: parameters.includes(CUSTOM_REFERENCE),
     rcon: new RegExp(RCON_VALUE.source, 'i').exec(parameters)?.slice(1).find((v) => v !== undefined) ?? '',
+    fastdl: /\+set\s+sv_wwwDownload\s+"?1"?/i.test(parameters)
+      ? /\+set\s+sv_wwwBaseURL\s+(?:"([^"]*)"|(\S+))/i.exec(parameters)?.slice(1).find((v) => v !== undefined) ?? ''
+      : '',
   };
 };
 
 /** The command line without anything the panel manages. */
 export const baseCommandLine = (parameters: string): string =>
   tidy(
-    ['fs_game', 'sv_authtoken', 'r_xassetnum']
+    ['fs_game', 'sv_authtoken', 'r_xassetnum', ...FASTDL_DVARS]
       .reduce((text, dvar) => text.replace(SET_VALUE(dvar), ''), parameters)
       .replace(RCON_VALUE, '')
       .split(CUSTOM_REFERENCE)
@@ -98,6 +103,8 @@ export const buildCommandLine = (parameters: string, wanted: Cod4CommandLine): s
     wanted.mod && `+set fs_game mods/${wanted.mod}`,
     wanted.auth && '+set sv_authtoken ${authtoken}',
     assets.length > 0 && `+set r_xassetnum "${assets.join(' ')}"`,
+    wanted.fastdl &&
+      `+set sv_allowDownload 1 +set sv_wwwDownload 1 +set sv_wwwBaseURL ${wanted.fastdl} +set sv_wwwDlDisconnected 0`,
   ]
     .filter(Boolean)
     .join(' ');
@@ -211,7 +218,11 @@ export function Cod4ModSection({
   const [parameters, setParameters] = useState<string | null>(null);
   const [instanceContent, setInstanceContent] = useState('');
   const [secretsContent, setSecretsContent] = useState('');
-  const [initial, setInitial] = useState({ mod: '', auth: '', material: '', xanim: '', xmodel: '', rcon: '', slots: '' });
+  const [initial, setInitial] = useState({ mod: '', auth: '', material: '', xanim: '', xmodel: '', rcon: '', slots: '', fastdl: '' });
+  // FastDL (gp-fastdl.sh): on/off for this server, plus the service's URL and what it publishes
+  const [fastdlOn, setFastdlOn] = useState(false);
+  const [fastdl, setFastdl] = useState<{ installed: boolean; url: string | null; running: boolean; files: Array<{ path: string; published: boolean }> } | null>(null);
+  const [showFastdlFiles, setShowFastdlFiles] = useState(false);
 
   const [selected, setSelected] = useState(NO_MOD);
   const [typed, setTyped] = useState('');
@@ -227,13 +238,14 @@ export function Cod4ModSection({
     setLoading(true);
     setError(null);
     try {
-      const [listing, defaults, common, secretsCommon, instance, secretsInstance] = await Promise.all([
+      const [listing, defaults, common, secretsCommon, instance, secretsInstance, fastdlStatus] = await Promise.all([
         apiClient.listServerFiles(serverId, modsPath).catch(() => null),
         readOptional(serverId, paths.defaults),
         readOptional(serverId, paths.common),
         readOptional(serverId, paths.secretsCommon),
         readOptional(serverId, paths.instance),
         readOptional(serverId, paths.secretsInstance),
+        apiClient.getCod4FastDl(serverId).catch(() => null),
       ]);
       const folders = (listing?.entries ?? [])
         .filter((entry) => entry.type === 'dir' && MOD_NAME_PATTERN.test(entry.name))
@@ -252,7 +264,10 @@ export function Cod4ModSection({
         xmodel: line.assets.xmodel,
         rcon: line.rcon === '${rconpassword}' ? secretOf('rconpassword') : line.rcon,
         slots: sources.map((c) => readCfgValue(c, 'maxplayers')).find((v) => v !== null) ?? '',
+        fastdl: line.fastdl ?? '',
       };
+      setFastdl(fastdlStatus);
+      setFastdlOn(values.fastdl !== '');
       setMods(folders);
       setParameters(effective);
       setInstanceContent(instance ?? '');
@@ -290,8 +305,10 @@ export function Cod4ModSection({
     slots: slots !== '' && !(/^\d+$/.test(slots) && Number(slots) >= 1 && Number(slots) <= 64),
   };
   const invalid = Object.values(problems).some(Boolean);
-  const current = { mod, auth, ...assets, rcon, slots };
-  const wanted: Cod4CommandLine = { mod, auth: auth !== '', assets, custom: keepCustom, rcon };
+  // when on, the line uses the service's current URL (also after the URL changed)
+  const fastdlUrl = fastdlOn ? fastdl?.url || initial.fastdl : '';
+  const current = { mod, auth, ...assets, rcon, slots, fastdl: fastdlUrl };
+  const wanted: Cod4CommandLine = { mod, auth: auth !== '', assets, custom: keepCustom, rcon, fastdl: fastdlUrl };
   const preview = parameters === null ? '' : buildCommandLine(parameters, wanted);
   // also when the saved line only needs rewriting (e.g. an old "+set rcon_password" moved to "+rcon_password")
   const changed =
@@ -479,6 +496,48 @@ export function Cod4ModSection({
           </div>
           <span className={hint}>Set after server.cfg (+rcon_password at the end of the command line), so it counts even if server.cfg has its own rcon_password.</span>
           {problems.rcon && <span className={bad}>Up to 8 characters: small and capital letters and numbers only (no special characters).</span>}
+        </div>
+
+        <div className={row}>
+          <span className={label}>FastDL</span>
+          <label className={`flex items-center gap-2 text-sm ${textPrimary}`}>
+            <input
+              type="checkbox"
+              checked={fastdlOn}
+              onChange={(e) => {
+                setFastdlOn(e.target.checked);
+                setSaved(false);
+              }}
+              disabled={disabled || (!fastdl?.installed && !fastdlOn)}
+              className="h-4 w-4"
+            />
+            Players download mods and maps over HTTP
+          </label>
+          {fastdl?.installed ? (
+            <span className={hint}>
+              <a href={fastdl.url ?? '#'} target="_blank" rel="noopener noreferrer" className="underline">{fastdl.url}</a>
+              {' · '}
+              <span className={fastdl.running ? 'text-emerald-400' : 'text-red-400'}>
+                {fastdl.running ? 'web server running' : 'web server not running (bash gp-fastdl.sh)'}
+              </span>
+              {' · '}
+              <button type="button" className="underline" onClick={() => setShowFastdlFiles((v) => !v)}>
+                {fastdl.files.filter((f) => f.published).length} of {fastdl.files.length} files of this server published
+              </button>
+            </span>
+          ) : (
+            <span className={hint}>FastDL is not installed: run gp-fastdl.sh on the panel server.</span>
+          )}
+          {showFastdlFiles && fastdl && (
+            <ul className={`${hint} max-h-48 overflow-y-auto rounded border ${borderColor} bg-black/20 p-2 font-mono`}>
+              {fastdl.files.length === 0 && <li>No .ff / .iwd files in mods or usermaps.</li>}
+              {fastdl.files.map((f) => (
+                <li key={f.path}>
+                  <span className={f.published ? 'text-emerald-400' : 'text-amber-400'}>{f.published ? '✓' : '…'}</span> {f.path}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
       </div>

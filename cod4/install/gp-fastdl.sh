@@ -16,7 +16,8 @@ WEB_ROOT="${FASTDL_ROOT:-/var/www/html}"
 DIR="$WEB_ROOT/cod4"
 PORT="${FASTDL_PORT:-8080}"
 LIB=/usr/local/lib/gamepanel-fastdl
-STATE=/var/lib/gamepanel-fastdl
+# state in the panel's data folder, so the panel can show it (Command line card > FastDL)
+STATE="$APP_ROOT/data/fastdl"
 ETC=/etc/gamepanel-fastdl
 NAME=gamepanel-fastdl
 IMAGE=nginx:1.27-alpine
@@ -50,7 +51,7 @@ import json, os, shutil, sys, time
 
 APP_ROOT = os.environ.get('GP_APP_ROOT', '/opt/gamepanel')
 TARGET = os.environ.get('FASTDL_DIR', '/var/www/html/cod4')
-STATE = os.environ.get('FASTDL_STATE', '/var/lib/gamepanel-fastdl')
+STATE = os.environ.get('FASTDL_STATE', '/opt/gamepanel/data/fastdl')
 INTERVAL = float(os.environ.get('FASTDL_INTERVAL', '10'))
 EXTENSIONS = ('.ff', '.iwd')
 SECTIONS = ('mods', 'usermaps')
@@ -224,7 +225,7 @@ fi
 host="${FASTDL_HOST:-$(grep -E '^DOMAIN=' "$APP_ROOT/deploy/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' ")}"
 [[ -n $host ]] || host="$(curl -4fsS --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')"
 url="http://$host:$PORT/cod4"
-echo "{\"url\": \"$url\"}" > "$ETC/fastdl.json"
+echo "{\"url\": \"$url\"}" > "$STATE/fastdl.json"
 sleep 1
 test_file="$(cd "$DIR" && find . -type f \( -name '*.ff' -o -name '*.iwd' \) | head -1)"
 if [[ -n $test_file ]]; then

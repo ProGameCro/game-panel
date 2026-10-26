@@ -195,6 +195,12 @@ class ApiClient {
   }
 
   // Call of Duty 4: are the cod4-linux folder and the local image ready for an install?
+  // FastDL (gp-fastdl.sh): URL, web server state and this server's published mods / maps
+  async getCod4FastDl(serverId: number) {
+    const response = await this.client.get(`/api/cod4/fastdl/${serverId}`);
+    return response.data as { installed: boolean; url: string | null; running: boolean; files: Array<{ path: string; published: boolean }> };
+  }
+
   async getCod4FilesStatus() {
     const response = await this.client.get('/api/cod4/files');
     return response.data as Cod4FilesStatus;
