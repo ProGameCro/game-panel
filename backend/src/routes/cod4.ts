@@ -20,8 +20,9 @@ router.get('/files', authMiddleware, async (_req: AuthenticatedRequest, res: Res
     }
 });
 
-// FastDL (gp-fastdl.sh): its URL, whether its web server runs, and which of this server's mods / maps it publishes.
-// gp-fastdl.sh keeps its state in the panel's data folder: fastdl/fastdl.json (url) and fastdl/manifest.json.
+// FastDL (gp-fastdl.sh): this server's own FastDL URL (<base>/<server number>), whether its web server runs, and which
+// of this server's mods / maps it publishes. gp-fastdl.sh keeps its state in the panel's data folder:
+// fastdl/fastdl.json (base url) and fastdl/manifest.json (published files, "<server>/mods/..." and "<server>/usermaps/...").
 const FASTDL_EXTENSIONS = /\.(ff|iwd)$/i;
 
 async function readJson<T>(file: string): Promise<T | null> {
@@ -68,8 +69,12 @@ router.get(
                 .then((c) => Boolean(c.State?.Running))
                 .catch(() => false);
             const serverfiles = path.join(getServerStoragePaths(serverId).dataDir, 'serverfiles');
-            const files = (await listFastDlFiles(serverfiles)).map((file) => ({ path: file, published: published.has(file) }));
-            return res.json({ installed: Boolean(info?.url), url: info?.url ?? null, running, files });
+            const files = (await listFastDlFiles(serverfiles)).map((file) => ({
+                path: file,
+                published: published.has(`${serverId}/${file}`),
+            }));
+            const url = info?.url ? `${info.url.replace(/\/+$/, '')}/${serverId}` : null;
+            return res.json({ installed: Boolean(url), url, running, files });
         } catch (error) {
             return res.status(500).json({ error: error instanceof Error ? error.message : 'Could not read the FastDL status' });
         }

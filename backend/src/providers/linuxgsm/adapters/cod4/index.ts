@@ -207,10 +207,33 @@ async function defaultStartParameters(): Promise<string> {
     return raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
 }
 
-// same place and form as the Command line card: +rcon_password at the end of startparameters in <gameservername>.cfg,
-// after +exec, so it counts even if server.cfg has its own rcon_password
-async function setCod4RconPassword(dataDir: string, gameServerName: string, password: string): Promise<void> {
-    const parameters = `${await defaultStartParameters()} +rcon_password ${password}`;
+// this server's FastDL (gp-fastdl.sh): <base>/<server number>, or null when FastDL is not installed
+export async function cod4FastDlUrl(serverId: number): Promise<string | null> {
+    try {
+        const info = JSON.parse(await fs.readFile(path.join(getConfig().gamepanelDataDir, 'fastdl', 'fastdl.json'), 'utf8')) as {
+            url?: unknown;
+        };
+        return typeof info.url === 'string' && /^https?:\/\/\S+$/.test(info.url) ? `${info.url.replace(/\/+$/, '')}/${serverId}` : null;
+    } catch {
+        return null;
+    }
+}
+
+// The startup line of a new server, in the same form as the Command line card writes it (startparameters in
+// <gameservername>.cfg): FastDL settings before +map / +exec, +rcon_password at the very end (after +exec, so it counts
+// even if server.cfg has its own rcon_password).
+async function setCod4StartParameters(
+    dataDir: string,
+    gameServerName: string,
+    options: { rconPassword?: string; fastDlUrl?: string | null }
+): Promise<void> {
+    let parameters = await defaultStartParameters();
+    if (options.fastDlUrl) {
+        const fastdl = `+set sv_allowDownload 1 +set sv_wwwDownload 1 +set sv_wwwBaseURL ${options.fastDlUrl} +set sv_wwwDlDisconnected 0`;
+        const at = parameters.search(/\+(?:exec|map|map_rotate|devmap)\b/);
+        parameters = at >= 0 ? `${parameters.slice(0, at)}${fastdl} ${parameters.slice(at)}` : `${parameters} ${fastdl}`;
+    }
+    if (options.rconPassword) parameters = `${parameters} +rcon_password ${options.rconPassword}`;
     await applyLinuxGsmConfigPatches({ dataDir, gameServerName }, [
         { fileName: `${gameServerName}.cfg`, values: { startparameters: parameters } },
     ]);
@@ -257,8 +280,13 @@ export const cod4Adapter: GameAdapter = {
         const count = await linkCod4Files(ctx.dataDir);
         await ensureServerConfig(ctx.dataDir, ctx.gameServerName);
         if (ctx.serverName) await setCod4Hostname(ctx.dataDir, ctx.gameServerName, ctx.serverName);
-        const rcon = ctx.installSecrets?.rconPassword;
-        if (rcon) await setCod4RconPassword(ctx.dataDir, ctx.gameServerName, rcon);
+        // a new server gets its RCON password from the install form and its own FastDL link (when FastDL is installed)
+        const rconPassword = ctx.installSecrets?.rconPassword;
+        const fastDlUrl = await cod4FastDlUrl(ctx.serverId);
+        if (rconPassword || fastDlUrl) {
+            await setCod4StartParameters(ctx.dataDir, ctx.gameServerName, { rconPassword, fastDlUrl });
+            if (fastDlUrl) logInfo('LINUXGSM:COD4', `FastDL: ${fastDlUrl}`, { serverId: ctx.serverId });
+        }
         if (count) {
             logInfo('LINUXGSM:COD4', `Game files from ${cod4FilesHostDir()}: ${count.linked} linked, ${count.copied} copied`, {
                 serverId: ctx.serverId,

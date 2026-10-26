@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # OVHcloud Game Panel: FastDL for Call of Duty 4 (mods and custom maps download over HTTP, like on TCAdmin).
-#  - Files: /var/www/html/cod4 (mods/<mod>/..., usermaps/<map>/...), served at http://<panel domain>:8080/cod4
-#  - Sync: the service gamepanel-fastdl watches every CoD4 server (and /opt/gamepanel/cod4-linux) and keeps the
-#    folder up to date by itself: new or changed .ff / .iwd files appear within seconds, deleted ones disappear.
+#  - Every CoD4 server has its own FastDL, by server number: /var/www/html/cod4/<server>/(mods|usermaps)/...,
+#    served at http://<panel domain>:8080/cod4/<server> (server 5: http://ovh.cod4x.org:8080/cod4/5).
+#  - Sync: the service gamepanel-fastdl watches every CoD4 server and keeps its folder up to date by itself: new or
+#    changed .ff / .iwd files appear within seconds, deleted ones disappear; a new server gets its folder on its own.
 #    Only .ff and .iwd files are published (never configs). Big files are hard links (no extra disk space).
 #    Opening the address or a folder in a browser gives 403: only the game files themselves can be downloaded.
 # Usage (as root):
@@ -45,8 +46,9 @@ mkdir -p "$DIR" "$LIB" "$STATE" "$ETC"
 # ---- 1) the sync service ----------------------------------------------------------------------------------------
 cat > "$LIB/gp-fastdl-sync.py" <<'PY'
 #!/usr/bin/env python3
-"""Keeps the FastDL folder in step with the CoD4 servers: mods/<mod>/*.ff|*.iwd and usermaps/<map>/*.ff|*.iwd.
-Sources: every server folder with CoD4X (servers/*/data/serverfiles) and the cod4-linux folder.
+"""Keeps the FastDL folders in step with the CoD4 servers, one folder per server (by server number):
+<target>/<server>/mods/<mod>/*.ff|*.iwd and <target>/<server>/usermaps/<map>/*.ff|*.iwd.
+Sources: every server folder with CoD4X (servers/<server>/data/serverfiles).
 Files are hard links where possible (same disk), copies otherwise. Only files this service created are ever deleted."""
 import json, os, shutil, sys, time
 
@@ -59,16 +61,19 @@ SECTIONS = ('mods', 'usermaps')
 MANIFEST = os.path.join(STATE, 'manifest.json')
 
 def sources():
-    roots = [os.path.join(APP_ROOT, 'data', 'cod4-linux')]
+    """server number -> its serverfiles folder"""
     servers = os.path.join(APP_ROOT, 'servers')
+    found = {}
     for key in sorted(os.listdir(servers)) if os.path.isdir(servers) else []:
-        roots.append(os.path.join(servers, key, 'data', 'serverfiles'))
-    return [r for r in roots if os.path.isfile(os.path.join(r, 'cod4x18_dedrun'))]
+        root = os.path.join(servers, key, 'data', 'serverfiles')
+        if key.replace('-', '').replace('_', '').isalnum() and os.path.isfile(os.path.join(root, 'cod4x18_dedrun')):
+            found[key] = root
+    return found
 
 def wanted():
-    """rel path -> source file (the newest one when several servers have the same file)"""
+    """rel path (<server>/mods/... or <server>/usermaps/...) -> source file"""
     result = {}
-    for root in sources():
+    for key, root in sources().items():
         for section in SECTIONS:
             base = os.path.join(root, section)
             if not os.path.isdir(base):
@@ -85,10 +90,7 @@ def wanted():
                         src = os.path.join(d, f)
                         if os.path.islink(src) or not os.path.isfile(src):
                             continue
-                        rel = os.path.relpath(src, root)
-                        old = result.get(rel)
-                        if old is None or os.stat(src).st_mtime > os.stat(old).st_mtime:
-                            result[rel] = src
+                        result[os.path.join(key, os.path.relpath(src, root))] = src
     return result
 
 def same(src, dst):
@@ -209,7 +211,7 @@ server {
     location / {
         return 403;
     }
-    location ~* ^/cod4/(mods|usermaps)/[^/]+/.+\.(ff|iwd)$ {
+    location ~* ^/cod4/[A-Za-z0-9_-]+/(mods|usermaps)/[^/]+/.+\.(ff|iwd)$ {
         limit_except GET HEAD { deny all; }
         types { }
         default_type application/octet-stream;
@@ -239,11 +241,13 @@ if [[ -n $test_file ]]; then
 fi
 echo
 echo "Gotovo. FastDL: $url"
-echo "Datoteke: $DIR (mods: $(ls "$DIR/mods" 2>/dev/null | wc -l), usermaps: $(ls "$DIR/usermaps" 2>/dev/null | wc -l)); sinkronizacija svakih 10 s (servis $NAME)."
+echo "Svaki CoD4 server ima svoj FastDL po broju servera:"
+for d in "$DIR"/*/; do
+  [[ -d $d ]] || continue
+  k="$(basename "$d")"; [[ $k == mods || $k == usermaps ]] && continue
+  echo "  server $k: $url/$k   (mods: $(ls "$d/mods" 2>/dev/null | wc -l), usermaps: $(ls "$d/usermaps" 2>/dev/null | wc -l))"
+done
+echo "Sinkronizacija svakih 10 s (servis $NAME), log: journalctl -u $NAME -f"
 echo
-echo "U server.cfg svakog CoD4 servera dodaj:"
-echo "  set sv_allowDownload \"1\""
-echo "  set sv_wwwDownload \"1\""
-echo "  set sv_wwwBaseURL \"$url\""
-echo "  set sv_wwwDlDisconnected \"0\""
-echo "pa restartaj server. Log sinkronizacije: journalctl -u $NAME -f"
+echo "Uključi ga po serveru u panelu: Settings > Game config > Command line > FastDL > Save, pa restart."
+echo "(Novi CoD4 serveri ga dobiju uključenog već pri instalaciji.)"

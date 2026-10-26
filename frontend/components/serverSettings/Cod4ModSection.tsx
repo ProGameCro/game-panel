@@ -528,6 +528,11 @@ export function Cod4ModSection({
           ) : (
             <span className={hint}>FastDL is not installed: run gp-fastdl.sh on the panel server.</span>
           )}
+          {fastdlOn && fastdl?.url && initial.fastdl && initial.fastdl !== fastdl.url && (
+            <span className="text-xs text-amber-400 sm:col-start-2">
+              This server's FastDL link is now {fastdl.url}: press Save and restart the server.
+            </span>
+          )}
           {showFastdlFiles && fastdl && (
             <ul className={`${hint} max-h-48 overflow-y-auto rounded border ${borderColor} bg-black/20 p-2 font-mono`}>
               {fastdl.files.length === 0 && <li>No .ff / .iwd files in mods or usermaps.</li>}

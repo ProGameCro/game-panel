@@ -29,7 +29,7 @@ Additions for CoD4 servers installed through LinuxGSM (Game Panel 1.6.0). Everyt
 | Server → **Settings → Game config → B3 (BigBrotherBot)** | Install / Start / Stop / Restart / Uninstall, console, `b3.xml` editor, logs. |
 | **Installing a new CoD4 server** | a **Slots** field; the game files come from your own folder `/opt/gamepanel/cod4-linux` (hard links: no extra disk space, ready in seconds) and **nothing is downloaded**, not even LinuxGSM from GitHub. The form checks the folder first and does not start the install while files are missing. |
 | `https://<panel domain>/pma/` | **phpMyAdmin** for the B3 database (MariaDB). |
-| `http://<panel domain>:8080/cod4` | **FastDL** for mods and custom maps (`/var/www/html/cod4`), kept in sync with all CoD4 servers by itself; on/off per server in the Command line card. |
+| `http://<panel domain>:8080/cod4/<server>` | **FastDL** for mods and custom maps: every server its own folder and link by server number (`/var/www/html/cod4/<server>`), kept in sync by itself; on for new servers, on/off in the Command line card. |
 | Sidebar → **✨** next to the light/dark button | **Neon** theme: animated aurora lights and grid, glass cards, neon edges and buttons (stops for reduced motion). Click again for the **orange** variant, once more to turn it off. |
 | User menu **⋮** → **Panel name** (admins) | Your own panel name instead of the *OVHcloud Game Panel* logo, for all users: sidebar, login page, mobile header, browser tab. *Use the logo* brings the logo back. |
 
@@ -102,20 +102,22 @@ bash ~/gp-cod4-linux.sh --from https://github.com/<you>/<repo>/releases/tag/<tag
 
 ### FastDL (`gp-fastdl.sh`)
 
-Players download mods and custom maps over HTTP, like on TCAdmin. The service `gamepanel-fastdl` copies the `.ff` and
-`.iwd` files from `mods/` and `usermaps/` of every CoD4 server (and `/opt/gamepanel/cod4-linux`) to `/var/www/html/cod4`
-and keeps them in sync every 10 seconds: new or changed files appear by themselves, deleted ones disappear. Configs and
+Players download mods and custom maps over HTTP, like on TCAdmin. Every CoD4 server has its own FastDL by server
+number: server 5 → `/var/www/html/cod4/5` at `http://<panel domain>:8080/cod4/5`, so servers with different versions of
+the same mod never mix. The service `gamepanel-fastdl` copies the `.ff` and `.iwd` files from each server's `mods/` and
+`usermaps/` and keeps them in sync every 10 seconds: new or changed files appear by themselves, deleted ones disappear,
+and a new server gets its folder on its own. Opening the address or a folder in a browser gives 403. Configs and
 other files are never published. A small web server (nginx container `gamepanel-fastdl`) serves the folder on port 8080
 (`FASTDL_PORT=8090 bash gp-fastdl.sh` for another one), because the panel's port 80 always redirects to HTTPS.
 
-Then turn it on per server in the panel: **Settings → Game config → Command line → FastDL** (the card also shows the
-URL, whether the web server runs and which of the server's mods / maps are published). It puts the FastDL settings on
+New CoD4 servers get it turned on at install. For existing ones: **Settings → Game config → Command line → FastDL**
+(the card also shows the server's link, whether the web server runs and which of its mods / maps are published). It puts the FastDL settings on
 the startup line; a `sv_wwwBaseURL` in `server.cfg` would override it, so remove that line there. Or by hand in `server.cfg`:
 
 ```
 set sv_allowDownload "1"
 set sv_wwwDownload "1"
-set sv_wwwBaseURL "http://<panel domain>:8080/cod4"
+set sv_wwwBaseURL "http://<panel domain>:8080/cod4/<server number>"
 set sv_wwwDlDisconnected "0"
 ```
 
