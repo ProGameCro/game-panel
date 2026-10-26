@@ -14,6 +14,7 @@ import {
 } from '../../utils/apiSerialization.js';
 import { sendRouteError } from '../../utils/routeErrors.js';
 import { parseServerId } from './shared.js';
+import { buildServerMemberVisibility, canSeeServer } from '../../utils/serverVisibility.js';
 
 export function createServerReadRoutes(): Router {
     const router = Router();
@@ -21,7 +22,9 @@ export function createServerReadRoutes(): Router {
     // GET /api/servers
     router.get('/', async (req: AuthenticatedRequest, res: Response) => {
         try {
-            const servers = await serverRepository.listAll();
+            // only the servers this user was given (Super Admins: all)
+            const canSee = await buildServerMemberVisibility(req.user);
+            const servers = (await serverRepository.listAll()).filter((server) => canSee(server.id));
             const canSeeEnv = await buildServerEnvVisibility(req.user);
 
             const serversWithInstall = await Promise.all(
@@ -50,7 +53,7 @@ export function createServerReadRoutes(): Router {
             }
 
             const server = await serverRepository.findById(serverId);
-            if (!server) {
+            if (!server || !(await canSeeServer(req.user, serverId))) {
                 return res.status(404).json({ error: 'Server not found' });
             }
 

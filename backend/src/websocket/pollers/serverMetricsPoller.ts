@@ -6,6 +6,7 @@ import { sendSafe } from '../auth.js';
 import { round2 } from '../../utils/number.js';
 import { logError } from '../../utils/logger.js';
 import { nowIso } from '../../utils/time.js';
+import { buildServerMemberVisibility } from '../../utils/serverVisibility.js';
 import { getCachedServerStorageDiskUsagePercent } from '../../utils/diskUsage.js';
 import {
     getServerMetricsSamples,
@@ -21,21 +22,20 @@ type ServerMetricsPollerOptions = {
     intervalMs?: number;
 };
 
-function broadcastServerMetrics(wss: WebSocketServer): void {
-    const payload = {
-        type: 'servers-metrics:update',
-        metrics: getServerMetricsSamples(),
-        timestamp: nowIso(),
-    } as const;
+async function broadcastServerMetrics(wss: WebSocketServer): Promise<void> {
+    const metrics = getServerMetricsSamples();
+    const timestamp = nowIso();
 
-    wss.clients.forEach((client) => {
+    for (const client of wss.clients) {
         const ws = client as AuthenticatedWebSocket;
-        if (ws.readyState !== WebSocket.OPEN) return;
-        if (!ws.userId) return;
-        if (!ws.subs?.serversMetrics) return;
+        if (ws.readyState !== WebSocket.OPEN) continue;
+        if (!ws.userId) continue;
+        if (!ws.subs?.serversMetrics) continue;
 
-        sendSafe(ws, payload);
-    });
+        // each user only gets the servers they were given
+        const canSee = await buildServerMemberVisibility(ws);
+        sendSafe(ws, { type: 'servers-metrics:update', metrics: metrics.filter((sample) => canSee(sample.serverId)), timestamp });
+    }
 }
 
 export function startServerMetricsPoller(wss: WebSocketServer, opts?: ServerMetricsPollerOptions): NodeJS.Timeout {
@@ -89,7 +89,7 @@ export function startServerMetricsPoller(wss: WebSocketServer, opts?: ServerMetr
                 });
             }
 
-            broadcastServerMetrics(wss);
+            await broadcastServerMetrics(wss);
         } catch (error) {
             logError('WS:POLLER:SERVER_METRICS', error);
         }

@@ -39,6 +39,7 @@ import { parseLimit } from '../utils/number.js';
 import { getPlayersSamples, hasPlayersSamples } from '../utils/playersCache.js';
 import { refreshPlayersCache } from '../services/players/fleet.js';
 import { getServerMetricsSamples } from '../utils/serverMetricsCache.js';
+import { buildServerMemberVisibility, canSeeServer } from '../utils/serverVisibility.js';
 
 export function ensureSubs(ws: AuthenticatedWebSocket): SubscriptionsState {
     ws.subs ??= {
@@ -84,9 +85,11 @@ export function cleanupClient(ws: AuthenticatedWebSocket): void {
     }
 }
 
-async function assertServerAccess(_ws: AuthenticatedWebSocket, serverId: number) {
+// a server this connection may follow: Super Admins any, other users only the servers they were given
+async function assertServerAccess(ws: AuthenticatedWebSocket, serverId: number) {
     const server = await serverRepository.findById(serverId);
     if (!server) return null;
+    if (!(await canSeeServer(ws, serverId))) return null;
     return server;
 }
 
@@ -177,7 +180,8 @@ export async function handleSubscribeServers(
     sendSafe(ws, { type: 'servers:subscribed', timestamp: nowIso() });
 
     try {
-        const servers = await serverRepository.listAll();
+        const canSee = await buildServerMemberVisibility(ws);
+        const servers = (await serverRepository.listAll()).filter((server) => canSee(server.id));
         const canSeeEnv = await buildServerEnvVisibility(ws);
 
         const serversWithInstall = await Promise.all(
@@ -206,7 +210,9 @@ export async function handleSubscribeLogs(
     message?: WsSubscribeLogsMessage
 ): Promise<void> {
     const server = await assertServerAccess(ws, serverId);
-    if (!server) {
+    // the console can show passwords (RCON ...): only with the log permission for this server
+    const canReadLogs = server ? (await buildServerPermissionVisibility(ws, PERMISSIONS.container.logsRead))(serverId) : false;
+    if (!server || !canReadLogs) {
         sendSafe(ws, { type: 'error', error: 'Access denied' });
         return;
     }
@@ -401,9 +407,10 @@ export async function handleSubscribeServersMetrics(ws: AuthenticatedWebSocket):
 
     sendSafe(ws, { type: 'servers-metrics:subscribed', timestamp: nowIso() });
 
+    const canSee = await buildServerMemberVisibility(ws);
     sendSafe(ws, {
         type: 'servers-metrics:update',
-        metrics: getServerMetricsSamples(),
+        metrics: getServerMetricsSamples().filter((sample) => canSee(sample.serverId)),
         timestamp: nowIso(),
     });
 }

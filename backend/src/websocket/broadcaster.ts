@@ -19,6 +19,7 @@ import type {
 } from '../types/events.js';
 import { redactServerEnv, serializeGameServerWithInstallProgress } from '../utils/apiSerialization.js';
 import { reattachLogStreamsForServer } from './subscriptions.js';
+import { canSeeServer } from '../utils/serverVisibility.js';
 
 interface BroadcasterCleanup {
     shutdown(): void;
@@ -54,6 +55,8 @@ export function attachBroadcaster(wss: WebSocketServer): BroadcasterCleanup {
             const ws = client as AuthenticatedWebSocket;
             if (!ws.userId || !ws.subs) continue;
             if (!ws.subs.servers) continue;
+            // only to users who were given this server
+            if (!(await canSeeServer(ws, serverId))) continue;
 
             let canSeeEnv = ws.isRoot === true;
             if (!canSeeEnv) {

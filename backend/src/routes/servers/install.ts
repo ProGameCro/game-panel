@@ -14,6 +14,7 @@ import { resolveInstallSpec } from '../../providers/installSpec.js';
 import type { ResolvedInstallSpec } from '../../providers/installTypes.js';
 import { normalizeServerProvider } from '../../providers/types.js';
 import { installServerAsync } from '../../services/servers.js';
+import { createOwnerIfNeeded, giveServerToOwner, parseOwnerChoice, type OwnerChoice } from '../../services/serverOwner.js';
 import { assertHostPortsAvailableForServer } from '../../services/hostPortAvailability.js';
 import {
     assertHostPortsAbove1024,
@@ -157,6 +158,27 @@ export function createServerInstallRoutes(): Router {
                     return res.status(statusCode).json({ error: e instanceof Error ? e.message : 'Invalid install payload' });
                 }
 
+                // the owner (Super Admins choose one in the install form): checked first, a new user made right before the
+                // server, so nobody else ever sees it
+                let ownerChoice: OwnerChoice | null = null;
+                try {
+                    ownerChoice = req.user?.isRoot ? await parseOwnerChoice(body) : null;
+                } catch (e) {
+                    return res.status(getErrorStatusCode(e, 400)).json({ error: e instanceof Error ? e.message : 'Invalid owner' });
+                }
+                // custom Docker images (provider external) may stay without an owner: only Super Admins see them then
+                if (req.user?.isRoot && !ownerChoice && provider !== 'external') {
+                    return res.status(400).json({ error: 'Choose the owner of the server (an existing user or a new one)' });
+                }
+                let ownerId: number | null = null;
+                if (ownerChoice) {
+                    try {
+                        ownerId = await createOwnerIfNeeded(ownerChoice);
+                    } catch (e) {
+                        return res.status(getErrorStatusCode(e, 400)).json({ error: e instanceof Error ? e.message : 'Could not create the owner' });
+                    }
+                }
+
                 const serverId = await serverRepository.create({
                     name,
                     provider: installSpec.provider,
@@ -183,6 +205,8 @@ export function createServerInstallRoutes(): Router {
                         await serverMemberRepository.create(serverId, requesterId, ['*']);
                     }
                 }
+
+                if (ownerId !== null) await giveServerToOwner(serverId, ownerId);
 
                 const server = await loadServerAfterMutation(serverId, 'install');
                 bus.emit('server.created', { serverId, timestamp: nowIso() });

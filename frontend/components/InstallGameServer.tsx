@@ -3,6 +3,7 @@ import { useBodyScrollLock } from '../src/ui/utils/useBodyScrollLock';
 import { AlertTriangle, ArrowLeft, ArrowRight, ChevronDown, Eye, EyeOff, Package, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import { InstallationProgressModal } from './InstallationProgressModal';
 import type { InstallGameHandlerPayload } from './app/appActionHandlers';
+import { OwnerPicker, generateOwnerPassword, ownerInvalid, ownerPayload, useIsSuperAdmin, type OwnerValue } from './OwnerPicker';
 import type { InstallInteraction, InstallStep } from '../types/gameServer';
 import { minecraftJavaVariants, type OvhcloudImage } from '../utils/ovhcloudCatalog';
 import { OVH_UNIFIED, filterLgsmForUnified } from '../utils/unifiedGameCatalog';
@@ -385,6 +386,9 @@ interface ConfigModalProps {
   pickerJavaImages?: JavaImageOption[];
   onPickerJavaImageChange?: (img: { imageId: string; dockerImage: string }) => void;
   requireEula?: boolean;
+  // Super Admins: who the server belongs to (users only see their own servers)
+  owner?: OwnerValue | null;
+  setOwner?: (v: OwnerValue) => void;
 }
 
 function generatePalworldAdminPassword(): string {
@@ -422,6 +426,7 @@ function ConfigModal({
   cpuLimit, setCpuLimit, memoryLimitMb, setMemoryLimitMb,
   error, loading, onConfirm, onCancel,
   mcServerType, pickerInitialEnv, onPickerEnvChange, pickerJavaImages, onPickerJavaImageChange, requireEula,
+  owner, setOwner,
 }: ConfigModalProps) {
   useBodyScrollLock(true);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
@@ -614,6 +619,8 @@ function ConfigModal({
               onChange={(e) => setServerName(makeUniqueServerName(e.target.value, usedServerNames))}
               placeholder="My Game Server" className={inputCls} />
           </div>
+
+          {owner && setOwner && <OwnerPicker value={owner} onChange={setOwner} inputCls={inputCls} />}
 
           {showPalworldAdmin && (
             <div>
@@ -1109,7 +1116,7 @@ function ConfigModal({
               className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 text-gray-700 dark:text-white border border-gray-300 dark:border-gray-600/50 transition-all">
               Cancel
             </AppButton>
-            <AppButton tone="primary" onClick={onConfirm} disabled={loading || !serverName.trim() || eulaBlocked || rustRconTooShort || valheimPasswordTooShort || cod4SlotsInvalid || cod4RconInvalid || cod4FilesBlocked}
+            <AppButton tone="primary" onClick={onConfirm} disabled={loading || !serverName.trim() || Boolean(owner && ownerInvalid(owner)) || eulaBlocked || rustRconTooShort || valheimPasswordTooShort || cod4SlotsInvalid || cod4RconInvalid || cod4FilesBlocked}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
               {loading ? 'Installing…' : 'Install'}
               <ArrowRight className="w-4 h-4" />
@@ -1158,6 +1165,8 @@ export function InstallGameServer({
   const [configShowEnv, setConfigShowEnv] = useState(false);
   const [configRequireEula, setConfigRequireEula] = useState(false);
   const [serverName, setServerName] = useState('');
+  const isSuperAdmin = useIsSuperAdmin();
+  const [owner, setOwner] = useState<OwnerValue>(() => ({ mode: 'new', username: '', password: generateOwnerPassword() }));
   const [tcpPorts, setTcpPorts] = useState<PortRow[]>([]);
   const [udpPorts, setUdpPorts] = useState<PortRow[]>([]);
   const [envRows, setEnvRows] = useState<EnvRow[]>([]);
@@ -1399,7 +1408,10 @@ export function InstallGameServer({
       ...(showHytale ? { imageOptions: { patchline: hytaleOptions.patchline || undefined, profileUuid: hytaleOptions.profileUuid || null } } : {}),
       ...(isLgsm && requireSteamCredentials ? { requireSteamCredentials: true, steamUsername: steamUsername.trim(), steamPassword: steamPassword } : {}),
       resourceLimits: (cpuVal > 0 || memVal > 0) ? { cpu: cpuVal > 0 ? cpuVal : 0, memoryMb: memVal > 0 ? memVal : 0 } : null,
+      ...(isSuperAdmin ? ownerPayload(owner) : {}),
     };
+    // the next server starts with a fresh owner form
+    setOwner({ mode: 'new', username: '', password: generateOwnerPassword() });
     setInstallWasExternal(false);
     setInstallingName(uniqueName);
     setShowConfig(false);
@@ -1876,6 +1888,8 @@ export function InstallGameServer({
           error={configError}
           loading={installing}
           onConfirm={handleConfigConfirm}
+          owner={isSuperAdmin ? owner : null}
+          setOwner={setOwner}
           onCancel={() => { setShowConfig(false); setPendingPayloadBase(null); setConfigMcServerType(null); onClearError?.(); }}
           mcServerType={configMcServerType}
           pickerInitialEnv={pickerInitialEnv}

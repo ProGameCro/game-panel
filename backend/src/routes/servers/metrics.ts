@@ -6,13 +6,15 @@ import { parseLimit } from '../../utils/number.js';
 import { getServerMetricsSamples } from '../../utils/serverMetricsCache.js';
 import { sendRouteError } from '../../utils/routeErrors.js';
 import { parseServerId } from './shared.js';
+import { buildServerMemberVisibility, canSeeServer } from '../../utils/serverVisibility.js';
 
 export function createServerMetricsRoutes(): Router {
     const router = Router();
 
     // GET /api/servers/metrics
-    router.get('/metrics', (_req: AuthenticatedRequest, res: Response) => {
-        return res.json({ metrics: getServerMetricsSamples() });
+    router.get('/metrics', async (req: AuthenticatedRequest, res: Response) => {
+        const canSee = await buildServerMemberVisibility(req.user);
+        return res.json({ metrics: getServerMetricsSamples().filter((sample) => canSee(sample.serverId)) });
     });
 
     // GET /api/servers/:id/metrics
@@ -24,7 +26,7 @@ export function createServerMetricsRoutes(): Router {
             }
 
             const server = await serverRepository.findById(serverId);
-            if (!server) {
+            if (!server || !(await canSeeServer(req.user, serverId))) {
                 return res.status(404).json({ error: 'Server not found' });
             }
 
