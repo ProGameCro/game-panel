@@ -58,7 +58,7 @@ export function Login({ onLogin }: LoginProps) {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center px-4"
+      className="gp-login min-h-screen flex items-center justify-center px-4"
       style={{ background: 'linear-gradient(135deg, #000e9c 0%, #002dbe 100%)' }}
     >
       <div className="w-full max-w-md">
@@ -74,7 +74,7 @@ export function Login({ onLogin }: LoginProps) {
         </div>
 
         <div
-          className="overflow-hidden rounded-2xl shadow-2xl"
+          className="gp-login-card overflow-hidden rounded-2xl shadow-2xl"
           style={{ border: '1px solid rgba(255,255,255,0.08)' }}
         >
           <div className="bg-white px-8 py-8">
@@ -175,7 +175,7 @@ export function Login({ onLogin }: LoginProps) {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-2 w-full rounded-lg py-2.5 text-sm font-semibold transition-all"
+                className="gp-login-submit mt-2 w-full rounded-lg py-2.5 text-sm font-semibold transition-all"
                 style={{
                   background: loading ? '#94a3b8' : 'linear-gradient(135deg, #003cbd 0%, #0050d7 100%)',
                   cursor: loading ? 'not-allowed' : 'pointer',

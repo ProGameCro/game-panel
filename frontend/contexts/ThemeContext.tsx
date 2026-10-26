@@ -30,10 +30,11 @@ function getInitialTheme(): Theme {
   return 'light';
 }
 
+// orange Neon until someone picks another theme (also on the login page)
 function getInitialNeon(): NeonColor {
   const stored = localStorage.getItem('theme-neon');
-  if (stored === 'orange') return 'orange';
-  return stored === '1' || stored === 'cyan' ? 'cyan' : 'off';
+  if (stored === 'off') return 'off';
+  return stored === '1' || stored === 'cyan' ? 'cyan' : 'orange';
 }
 
 const NEXT_NEON: Record<NeonColor, NeonColor> = { off: 'cyan', cyan: 'orange', orange: 'off' };

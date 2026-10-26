@@ -257,6 +257,44 @@ html.gp-neon ::selection {
   background: rgb(var(--neon-c) / 0.35);
 }
 
+/* ── login page: its colours are inline styles, so the theme needs !important ── */
+html.gp-neon .gp-login {
+  background: transparent !important;
+}
+
+html.gp-neon .gp-login-card {
+  border-color: var(--gp-neon-edge) !important;
+  box-shadow:
+    0 0 0 1px rgb(var(--neon-b) / 0.15) inset,
+    0 20px 60px -20px rgb(var(--neon-a) / 0.55) !important;
+}
+
+html.gp-neon .gp-login-card > div {
+  background-color: var(--gp-neon-glass) !important;
+}
+
+html.gp-neon .gp-login-card label {
+  color: #e5e7eb !important;
+}
+
+html.gp-neon .gp-login-card input {
+  background: var(--gp-neon-s1) !important;
+  border-color: var(--gp-neon-edge) !important;
+  color: #f8fafc !important;
+}
+
+html.gp-neon .gp-login-card input:focus {
+  border-color: rgb(var(--neon-a)) !important;
+  box-shadow: 0 0 0 3px rgb(var(--neon-a) / 0.2) !important;
+}
+
+html.gp-neon .gp-login-submit:not(:disabled) {
+  background: var(--gp-neon-btn) !important;
+  background-size: 300% 100% !important;
+  box-shadow: 0 0 18px -4px rgb(var(--neon-b) / 0.8) !important;
+  animation: gp-neon-flow 8s linear infinite;
+}
+
 /* ── keyframes ── */
 @keyframes gp-neon-aurora {
   0% {
@@ -308,7 +346,8 @@ html.gp-neon ::selection {
   html.gp-neon aside img,
   html.gp-neon .gp-neon-toggle,
   html.gp-neon .gp-panel-name,
-  html.gp-neon .gp-app-button--primary {
+  html.gp-neon .gp-app-button--primary,
+  html.gp-neon .gp-login-submit {
     animation: none !important;
   }
 }
