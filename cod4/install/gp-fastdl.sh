@@ -60,6 +60,9 @@ INTERVAL = float(os.environ.get('FASTDL_INTERVAL', '10'))
 EXTENSIONS = ('.ff', '.iwd')
 SECTIONS = ('mods', 'usermaps')
 MANIFEST = os.path.join(STATE, 'manifest.json')
+# the panel's "Sync now" button leaves this file; the service syncs at once and writes the result to status.json
+REQUEST = os.path.join(STATE, 'sync-request')
+STATUS = os.path.join(STATE, 'status.json')
 
 def sources():
     """server number -> its serverfiles folder"""
@@ -159,22 +162,39 @@ def sync_once():
     save_manifest(owned)
     return added, removed, len(want)
 
+def write_status(**values):
+    tmp = STATUS + '.tmp'
+    json.dump(dict(values, time=time.time()), open(tmp, 'w'))
+    os.replace(tmp, STATUS)
+
 def main():
     os.makedirs(TARGET, exist_ok=True)
     os.makedirs(STATE, exist_ok=True)
     once = '--once' in sys.argv
     while True:
+        requested = os.path.exists(REQUEST)
+        if requested:
+            try:
+                os.remove(REQUEST)
+            except FileNotFoundError:
+                pass
         try:
             added, removed, total = sync_once()
-            if added or removed or once:
-                print('fastdl: %d files (%d new or changed, %d removed)' % (total, added, removed), flush=True)
+            write_status(ok=True, total=total, added=added, removed=removed)
+            if added or removed or once or requested:
+                print('fastdl: %d files (%d new or changed, %d removed)%s' % (total, added, removed, ' [sync now]' if requested else ''), flush=True)
         except Exception as e:
+            write_status(ok=False, error=str(e))
             print('fastdl sync failed: %s' % e, flush=True)
             if once:
                 sys.exit(1)
         if once:
             return
-        time.sleep(INTERVAL)
+        # wait for the next round, or less when the panel asks for a sync
+        waited = 0.0
+        while waited < INTERVAL and not os.path.exists(REQUEST):
+            time.sleep(0.5)
+            waited += 0.5
 
 if __name__ == '__main__':
     main()

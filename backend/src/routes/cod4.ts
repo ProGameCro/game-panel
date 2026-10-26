@@ -76,9 +76,42 @@ router.get(
             const url = info?.url ? `${info.url.replace(/\/+$/, '')}/${serverId}` : null;
             // the same files over HTTPS for browsers (the game uses url, plain HTTP)
             const browserUrl = info?.browserUrl ? `${info.browserUrl.replace(/\/+$/, '')}/${serverId}` : null;
-            return res.json({ installed: Boolean(url), url, browserUrl, running, files });
+            const status = await readJson<{ time?: number; ok?: boolean }>(path.join(stateDir, 'status.json'));
+            const lastSync = typeof status?.time === 'number' ? Math.round(status.time * 1000) : null;
+            return res.json({ installed: Boolean(url), url, browserUrl, running, lastSync, files });
         } catch (error) {
             return res.status(500).json({ error: error instanceof Error ? error.message : 'Could not read the FastDL status' });
+        }
+    }
+);
+
+// "Sync now": leaves a request for the sync service (gamepanel-fastdl on the host), which checks for it every half
+// second, and waits for its result (status.json newer than the request)
+router.post(
+    '/fastdl/:id/sync',
+    authMiddleware,
+    requireServerPermission(PERMISSIONS.fs.write),
+    async (_req: AuthenticatedRequest, res: Response) => {
+        try {
+            const stateDir = path.join(getConfig().gamepanelDataDir, 'fastdl');
+            if (!(await readJson<{ url?: string }>(path.join(stateDir, 'fastdl.json')))?.url) {
+                return res.status(409).json({ error: 'FastDL is not installed (run gp-fastdl.sh on the panel server)' });
+            }
+            const requestedAt = Date.now();
+            await fs.writeFile(path.join(stateDir, 'sync-request'), String(requestedAt));
+            for (let waited = 0; waited < 15000; waited += 500) {
+                await new Promise((resolve) => setTimeout(resolve, 500));
+                const status = await readJson<{ time?: number; ok?: boolean; error?: string; total?: number; added?: number; removed?: number }>(
+                    path.join(stateDir, 'status.json')
+                );
+                if (typeof status?.time === 'number' && status.time * 1000 >= requestedAt) {
+                    if (!status.ok) return res.status(500).json({ error: `FastDL sync failed: ${status.error ?? 'unknown error'}` });
+                    return res.json({ total: status.total ?? 0, added: status.added ?? 0, removed: status.removed ?? 0 });
+                }
+            }
+            return res.status(504).json({ error: 'The FastDL service did not answer (systemctl status gamepanel-fastdl)' });
+        } catch (error) {
+            return res.status(500).json({ error: error instanceof Error ? error.message : 'Could not start the FastDL sync' });
         }
     }
 );

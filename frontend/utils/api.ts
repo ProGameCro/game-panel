@@ -201,6 +201,12 @@ class ApiClient {
     return response.data as { installed: boolean; url: string | null; browserUrl?: string | null; running: boolean; files: Array<{ path: string; published: boolean }> };
   }
 
+  // FastDL "Sync now": the sync service publishes this server's mods / maps at once
+  async syncCod4FastDl(serverId: number) {
+    const response = await this.client.post(`/api/cod4/fastdl/${serverId}/sync`);
+    return response.data as { total: number; added: number; removed: number };
+  }
+
   async getCod4FilesStatus() {
     const response = await this.client.get('/api/cod4/files');
     return response.data as Cod4FilesStatus;

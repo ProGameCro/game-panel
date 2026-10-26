@@ -64,4 +64,11 @@ if insert('frontend/utils/api.ts', 'getCod4FastDl', '  async getCod4FilesStatus(
           "    return response.data as { installed: boolean; url: string | null; browserUrl?: string | null; running: boolean; files: Array<{ path: string; published: boolean }> };\n"
           "  }\n\n", after=False):
     changed.add('frontend')
+if insert('frontend/utils/api.ts', 'syncCod4FastDl', '  async getCod4FilesStatus() {\n',
+          "  // FastDL \"Sync now\": the sync service publishes this server's mods / maps at once\n"
+          "  async syncCod4FastDl(serverId: number) {\n"
+          "    const response = await this.client.post(`/api/cod4/fastdl/${serverId}/sync`);\n"
+          "    return response.data as { total: number; added: number; removed: number };\n"
+          "  }\n\n", after=False):
+    changed.add('frontend')
 print(' '.join(sorted(changed)))

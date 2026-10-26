@@ -221,8 +221,36 @@ export function Cod4ModSection({
   const [initial, setInitial] = useState({ mod: '', auth: '', material: '', xanim: '', xmodel: '', rcon: '', slots: '', fastdl: '' });
   // FastDL (gp-fastdl.sh): on/off for this server, plus the service's URL and what it publishes
   const [fastdlOn, setFastdlOn] = useState(false);
-  const [fastdl, setFastdl] = useState<{ installed: boolean; url: string | null; browserUrl?: string | null; running: boolean; files: Array<{ path: string; published: boolean }> } | null>(null);
+  const [fastdl, setFastdl] = useState<{ installed: boolean; url: string | null; browserUrl?: string | null; running: boolean; lastSync?: number | null; files: Array<{ path: string; published: boolean }> } | null>(null);
   const [showFastdlFiles, setShowFastdlFiles] = useState(false);
+  const [fastdlSyncing, setFastdlSyncing] = useState(false);
+  const [fastdlMessage, setFastdlMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const syncFastdl = async () => {
+    setFastdlSyncing(true);
+    setFastdlMessage(null);
+    try {
+      const result = await apiClient.syncCod4FastDl(serverId);
+      setFastdl(await apiClient.getCod4FastDl(serverId).catch(() => fastdl));
+      setFastdlMessage({ ok: true, text: `Synced: ${result.added} new or changed, ${result.removed} removed.` });
+    } catch (e) {
+      setFastdlMessage({ ok: false, text: (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'FastDL sync failed.' });
+    } finally {
+      setFastdlSyncing(false);
+    }
+  };
+  const copyFastdl = async () => {
+    if (!fastdl?.url) return;
+    try {
+      await navigator.clipboard.writeText(fastdl.url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  };
+  // files open over HTTPS when available (browsers often refuse plain http://)
+  const fastdlFileUrl = (file: string) => `${fastdl?.browserUrl || fastdl?.url}/${file}`;
 
   const [selected, setSelected] = useState(NO_MOD);
   const [typed, setTyped] = useState('');
@@ -515,15 +543,11 @@ export function Cod4ModSection({
           </label>
           {fastdl?.installed ? (
             <span className={hint}>
-              {/* the game downloads over plain HTTP; browsers often refuse http://, so the link opens the HTTPS copy */}
-              <span className="font-mono">{fastdl.url}</span>
-              {fastdl.browserUrl && (
-                <>
-                  {' ('}
-                  <span title="The same files over HTTPS, for browsers. Folders give 403: open a .ff or .iwd file.">HTTPS: {fastdl.browserUrl}</span>
-                  {')'}
-                </>
-              )}
+              {/* the game downloads over plain HTTP; folders give 403, so the files in the list are the links to open */}
+              <span className="font-mono">{fastdl.url}</span>{' '}
+              <button type="button" className="underline" onClick={() => void copyFastdl()} title="Copy the link the game uses">
+                {copied ? 'copied' : 'copy'}
+              </button>
               {' · '}
               <span className={fastdl.running ? 'text-emerald-400' : 'text-red-400'}>
                 {fastdl.running ? 'web server running' : 'web server not running (bash gp-fastdl.sh)'}
@@ -531,6 +555,18 @@ export function Cod4ModSection({
               {' · '}
               <button type="button" className="underline" onClick={() => setShowFastdlFiles((v) => !v)}>
                 {fastdl.files.filter((f) => f.published).length} of {fastdl.files.length} files of this server published
+              </button>
+              {fastdl.lastSync ? ` · last sync ${new Date(fastdl.lastSync).toLocaleTimeString()}` : ''}
+              {' · '}
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 underline disabled:opacity-50"
+                onClick={() => void syncFastdl()}
+                disabled={fastdlSyncing}
+                title="Publish this server's mods and maps now (the service also does it every 10 seconds)"
+              >
+                <RefreshCw className={`h-3 w-3 ${fastdlSyncing ? 'animate-spin' : ''}`} />
+                {fastdlSyncing ? 'syncing…' : 'Sync now'}
               </button>
             </span>
           ) : (
@@ -541,12 +577,22 @@ export function Cod4ModSection({
               This server's FastDL link is now {fastdl.url}: press Save and restart the server.
             </span>
           )}
+          {fastdlMessage && (
+            <span className={`text-xs sm:col-start-2 ${fastdlMessage.ok ? 'text-emerald-400' : 'text-red-400'}`}>{fastdlMessage.text}</span>
+          )}
           {showFastdlFiles && fastdl && (
             <ul className={`${hint} max-h-48 overflow-y-auto rounded border ${borderColor} bg-black/20 p-2 font-mono`}>
               {fastdl.files.length === 0 && <li>No .ff / .iwd files in mods or usermaps.</li>}
               {fastdl.files.map((f) => (
                 <li key={f.path}>
-                  <span className={f.published ? 'text-emerald-400' : 'text-amber-400'}>{f.published ? '✓' : '…'}</span> {f.path}
+                  <span className={f.published ? 'text-emerald-400' : 'text-amber-400'}>{f.published ? '✓' : '…'}</span>{' '}
+                  {f.published ? (
+                    <a href={fastdlFileUrl(f.path)} target="_blank" rel="noopener noreferrer" className="underline" title="Open (download) from FastDL">
+                      {f.path}
+                    </a>
+                  ) : (
+                    f.path
+                  )}
                 </li>
               ))}
             </ul>
