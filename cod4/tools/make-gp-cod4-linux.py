@@ -66,6 +66,31 @@ gamedig = b64(read('cod4/linuxgsm/check_gamedig.sh'))
 sponsor = b64(read('cod4/linuxgsm/command_sponsor.sh'))
 
 # same rule as the panel (adapters/cod4/index.ts): big files are hard links, small files and executables copies
+# --relink: a server's files that are identical to the folder's become hard links (frees the disk space)
+relink_py = b64('''import filecmp, os, sys
+folder, server = sys.argv[1], sys.argv[2]
+def is_program(path):
+    with open(path, 'rb') as f:
+        return f.read(4) == b'\\x7fELF'
+count = saved = 0
+for d, dirs, files in os.walk(server):
+    for name in files:
+        b = os.path.join(d, name)
+        a = os.path.join(folder, os.path.relpath(b, server))
+        if os.path.islink(b) or not os.path.isfile(a) or os.path.islink(a):
+            continue
+        sa, sb = os.stat(a), os.stat(b)
+        if sa.st_ino == sb.st_ino or sa.st_size != sb.st_size or sb.st_size < 1048576 or is_program(b):
+            continue
+        if not filecmp.cmp(a, b, shallow=False):
+            continue
+        tmp = b + '.relink-tmp'
+        os.link(a, tmp)
+        os.replace(tmp, b)
+        count += 1; saved += sb.st_size
+print('%d datoteka povezano, oslobođeno %.1f GB' % (count, saved / 1024 ** 3))
+'''.encode())
+
 # --from: turns the given links into download URLs ("github <api url>" or "url <url>"), GitHub release pages included
 resolve_py = b64(b'''import json, os, re, sys, urllib.request
 token = os.environ.get('GH_TOKEN', '')
@@ -95,6 +120,10 @@ for link in sys.argv[1:]:
 link_py = b64(b'''import os, shutil, sys
 src, dst = sys.argv[1], sys.argv[2]
 linked = copied = 0
+def is_program(path):
+    # Linux programs and libraries (ELF); game files often have the executable bit set too
+    with open(path, 'rb') as f:
+        return f.read(4) == b'\\x7fELF'
 for d, dirs, files in os.walk(src):
     rel = os.path.relpath(d, src)
     dirs[:] = [x for x in dirs if not (rel == '.' and x == 'Logs')]
@@ -108,7 +137,7 @@ for d, dirs, files in os.walk(src):
         if os.path.islink(a):
             os.symlink(os.readlink(a), b); continue
         st = os.stat(a)
-        if st.st_size >= 1048576 and not st.st_mode & 0o111:
+        if st.st_size >= 1048576 and not is_program(a):
             try:
                 os.link(a, b); linked += 1; continue
             except OSError:
@@ -126,6 +155,7 @@ script = r'''#!/usr/bin/env bash
 # Usage (as root):
 #   bash gp-cod4-linux.sh        set up / update the panel, the image and the folder, then show what is in it
 #   bash gp-cod4-linux.sh 5      fill /opt/gamepanel/cod4-linux with the files of server 5 (replaces what is there)
+#   bash gp-cod4-linux.sh --relink 8           server 8's files that are the same as the folder's become hard links
 #   bash gp-cod4-linux.sh --pack [folder]       pack /opt/gamepanel/cod4-linux into parts of max 1.9 GB (default /root),
 #                                               to keep them somewhere (a PRIVATE GitHub repo's release, your web server)
 #   bash gp-cod4-linux.sh --from <link> [...]   fill the folder from those parts (replaces what is there):
@@ -182,6 +212,17 @@ if [[ ${1:-} == --pack ]]; then
   echo "Spremi te datoteke negdje sigurno, npr. u release PRIVATNOG GitHub repozitorija (github.com/new -> Private,"
   echo "pa Releases -> Draft a new release -> povuci datoteke -> Publish). Ne u javni repo: datoteke igre su Activisionove."
   echo "Nakon reinstalacije:  export GH_TOKEN=<token>;  bash $0 --from https://github.com/<ti>/<repo>/releases/tag/<tag>"
+  exit 0
+fi
+
+if [[ ${1:-} == --relink ]]; then
+  k="${2:-}"
+  [[ $k =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Upotreba: bash $0 --relink <broj servera>"; exit 1; }
+  src="$APP_ROOT/servers/$k/data/serverfiles"
+  [[ -f $src/cod4x18_dedrun ]] || { echo "Server $k nema CoD4X datoteke ($src)"; exit 1; }
+  nonempty "$FILES" || { echo "$LINK je prazan"; exit 1; }
+  echo "== Server $k: iste datoteke kao u $LINK postaju hardlinkovi ..."
+  echo '__RELINK_PY__' | base64 -d | python3 - "$FILES" "$src"
   exit 0
 fi
 
@@ -294,7 +335,7 @@ else
 fi
 echo "Postojeći serveri rade kao i prije. Nakon nadogradnje Game Panela ponovno pokreni: sudo bash $0"
 '''
-for key, value in {'__LINK_PY__': link_py, '__RESOLVE_PY__': resolve_py, '__DOCKERFILE__': dockerfile, '__GAMEDIG__': gamedig, '__SPONSOR__': sponsor,
+for key, value in {'__LINK_PY__': link_py, '__RELINK_PY__': relink_py, '__RESOLVE_PY__': resolve_py, '__DOCKERFILE__': dockerfile, '__GAMEDIG__': gamedig, '__SPONSOR__': sponsor,
                    '__REPLACE_PY__': replace_py, '__PATCH_PY__': patch_py}.items():
     script = script.replace(key, value)
 open(OUT, 'w').write(script)

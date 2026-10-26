@@ -90,6 +90,18 @@ async function copyFile(source: string, target: string): Promise<void> {
     await fs.copyFile(source, target, constants.COPYFILE_FICLONE);
 }
 
+// a Linux program or library (ELF), recognised by its content: game files often have the executable bit set too
+async function isProgram(file: string): Promise<boolean> {
+    const handle = await fs.open(file, 'r');
+    try {
+        const head = Buffer.alloc(4);
+        await handle.read(head, 0, 4, 0);
+        return head.equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]));
+    } finally {
+        await handle.close();
+    }
+}
+
 async function linkTree(source: string, target: string, count: LinkCount): Promise<void> {
     await fs.mkdir(target, { recursive: true });
     for (const entry of await fs.readdir(source, { withFileTypes: true })) {
@@ -102,8 +114,8 @@ async function linkTree(source: string, target: string, count: LinkCount): Promi
         } else if (entry.isFile()) {
             if (/\.log(\.\d+)?$/i.test(entry.name)) continue;
             const st = await fs.stat(from);
-            // executables are copied too: CoD4X replaces its own binary when it updates
-            if (st.size >= LINK_MIN_BYTES && (st.mode & 0o111) === 0) {
+            // programs are copied too: CoD4X replaces its own binary when it updates
+            if (st.size >= LINK_MIN_BYTES && !(await isProgram(from))) {
                 try {
                     await fs.link(from, to);
                     count.linked++;

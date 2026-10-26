@@ -65,6 +65,7 @@ Then reload the panel in the browser with **Ctrl+Shift+R**. All scripts can be r
 ```bash
 bash ~/gp-cod4-linux.sh        # set up the folder, the local image and the panel; shows what is in the folder
 bash ~/gp-cod4-linux.sh 5      # fill the folder with the files of server 5 (replaces what is there)
+bash ~/gp-cod4-linux.sh --relink 8   # server 8's files that are the same as the folder's become hard links (frees space)
 ```
 
 Or put the CoD4X files into `/opt/gamepanel/cod4-linux` yourself (FTP, `cp -a`): `cod4x18_dedrun`, `main` (with the
