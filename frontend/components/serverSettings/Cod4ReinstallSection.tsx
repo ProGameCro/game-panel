@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle2, RotateCcw, X } from 'lucide-react';
+import { CheckCircle2, Play, RotateCcw, Square, X } from 'lucide-react';
 import { apiClient } from '../../utils/api';
 import { AppButton } from '../../src/ui/components';
 import { ConfirmationModal } from '../ConfirmationModal';
@@ -29,11 +29,33 @@ const STEP_TEXT: Record<Cod4ReinstallStatus['step'], string> = {
   done: 'Done',
 };
 
+// Start / Stop in the window: solid, coloured like the server list's power buttons
+function PowerButton({ kind, busy, onClick }: { kind: 'start' | 'stop'; busy: boolean; onClick: () => void }) {
+  const start = kind === 'start';
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onClick}
+      className={`inline-flex min-w-[9rem] items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-wait disabled:opacity-70 ${
+        start
+          ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200'
+          : 'border-red-500/60 bg-red-500/15 text-red-300 hover:bg-red-500/25 hover:text-red-200'
+      }`}
+    >
+      {start ? <Play className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+      {busy ? (start ? 'Starting…' : 'Stopping…') : start ? 'Start server' : 'Stop server'}
+    </button>
+  );
+}
+
 function Cod4ReinstallBody({ serverId, serverStatus, textSecondary }: { serverId: number; serverStatus?: string | null; textSecondary: string }) {
   const [keepContent, setKeepContent] = useState(true);
   const [confirm, setConfirm] = useState(false);
   const [status, setStatus] = useState<Cod4ReinstallStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [start, setStart] = useState<'idle' | 'starting' | 'started'>('idle');
+  const [stopping, setStopping] = useState(false);
   const isRunning = ['running', 'starting', 'restarting'].includes(String(serverStatus ?? '').toLowerCase());
   const working = status?.state === 'running';
 
@@ -80,7 +102,23 @@ function Cod4ReinstallBody({ serverId, serverStatus, textSecondary }: { serverId
           </span>
         </AppButton>
       </div>
-      {isRunning && !working && <p className="mt-2 text-xs text-amber-300">Stop the server first.</p>}
+      {isRunning && !working && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-amber-300">The server is running: stop it first.</p>
+          <PowerButton
+            kind="stop"
+            busy={stopping}
+            onClick={() => {
+              setStopping(true);
+              setError(null);
+              apiClient
+                .stopServer(serverId)
+                .catch((e) => setError((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Could not stop the server.'))
+                .finally(() => setStopping(false));
+            }}
+          />
+        </div>
+      )}
 
       {status && (
         <div className="mt-3 rounded-lg border border-gray-700 p-3">
@@ -103,10 +141,31 @@ function Cod4ReinstallBody({ serverId, serverStatus, textSecondary }: { serverId
             </>
           )}
           {status.state === 'done' && (
-            <p className="flex items-center gap-2 text-sm text-emerald-300">
-              <CheckCircle2 className="h-4 w-4" /> Reinstall finished in {seconds} s
-              {status.kept.length > 0 ? ' (mods and maps kept)' : ''}. You can start the server.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="flex items-center gap-2 text-sm text-emerald-300">
+                <CheckCircle2 className="h-4 w-4" /> Reinstall finished in {seconds} s
+                {status.kept.length > 0 ? ' (mods and maps kept)' : ''}.
+              </p>
+              {start === 'started' ? (
+                <span className="text-sm text-emerald-300">Server is starting.</span>
+              ) : (
+                <PowerButton
+                  kind="start"
+                  busy={start === 'starting'}
+                  onClick={() => {
+                    setStart('starting');
+                    setError(null);
+                    apiClient
+                      .startServer(serverId)
+                      .then(() => setStart('started'))
+                      .catch((e) => {
+                        setStart('idle');
+                        setError((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Could not start the server.');
+                      });
+                  }}
+                />
+              )}
+            </div>
           )}
           {status.state === 'error' && <p className="text-sm text-red-300">Reinstall failed: {status.error}</p>}
         </div>
@@ -120,6 +179,7 @@ function Cod4ReinstallBody({ serverId, serverStatus, textSecondary }: { serverId
           setConfirm(false);
           setError(null);
           try {
+            setStart('idle');
             setStatus(await apiClient.cod4Reinstall(serverId, keepContent));
           } catch (e) {
             setError((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Reinstall failed.');

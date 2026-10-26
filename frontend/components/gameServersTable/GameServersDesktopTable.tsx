@@ -765,7 +765,13 @@ export function GameServersDesktopTable({
       </AppTable>
     </div>
     {reinstallFor && (
-      <Cod4ReinstallDialog serverId={reinstallFor.id} serverName={reinstallFor.name} serverStatus={reinstallFor.status} onClose={() => setReinstallFor(null)} />
+      <Cod4ReinstallDialog
+        serverId={reinstallFor.id}
+        serverName={reinstallFor.name}
+        // live: the status follows Stop / Start made in the window
+        serverStatus={filteredAndSortedServers.find((x) => Number(x.id) === reinstallFor.id)?.status ?? reinstallFor.status}
+        onClose={() => setReinstallFor(null)}
+      />
     )}
     {/* users who may not install servers do not get the button at all */}
     {canInstall && (
