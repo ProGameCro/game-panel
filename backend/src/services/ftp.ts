@@ -21,6 +21,8 @@ type FtpConfig = {
     sftpPort: number;
     // where the servers' folders are inside the FTP container
     serversDir: string;
+    // the FTP service reports every upload, delete ... to the panel with this key (/api/ftp/events)
+    hookKey: string | null;
 };
 
 export type FtpAccount = { username: string; password: string; createdAt: number };
@@ -55,6 +57,7 @@ export async function readFtpConfig(): Promise<FtpConfig | null> {
             ftpPort: Number(raw.ftpPort) || 21,
             sftpPort: Number(raw.sftpPort) || 2022,
             serversDir: raw.serversDir || '/srv/servers',
+            hookKey: raw.hookKey || null,
         };
     } catch {
         return null;
@@ -198,4 +201,130 @@ export async function listFtpAccounts(): Promise<Array<{ serverId: number } & Ft
     return Object.entries(await readAccounts())
         .map(([id, account]) => ({ serverId: Number(id), ...account }))
         .sort((a, b) => a.serverId - b.serverId);
+}
+
+// ---- what users do over FTP (the FTP service reports it, see gp-ftp.sh) and who is connected now
+export type FtpEvent = {
+    time: number;
+    serverId: number | null;
+    username: string;
+    action: string;
+    path: string;
+    target?: string;
+    size?: number;
+    protocol: string;
+    ip: string;
+    ok: boolean;
+};
+
+const eventsFile = () => path.join(stateDir(), 'events.jsonl');
+const MAX_EVENTS_BYTES = 5 * 1024 * 1024;
+const KEEP_EVENTS = 20000;
+let writing: Promise<void> = Promise.resolve();
+
+export async function checkFtpHookKey(key: unknown): Promise<boolean> {
+    const config = await readFtpConfig();
+    if (!config?.hookKey || typeof key !== 'string') return false;
+    const a = Buffer.from(key);
+    const b = Buffer.from(config.hookKey);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+export function recordFtpEvent(raw: Record<string, unknown>): Promise<void> {
+    const username = String(raw.username ?? '');
+    const id = /^ftp(\d+)$/.exec(username)?.[1];
+    const ns = Number(raw.timestamp);
+    const event: FtpEvent = {
+        time: Number.isFinite(ns) && ns > 0 ? Math.round(ns / 1e6) : Date.now(),
+        serverId: id ? Number(id) : null,
+        username: username.slice(0, 64),
+        action: String(raw.action ?? '').slice(0, 20),
+        path: String(raw.virtual_path ?? '').slice(0, 500),
+        protocol: String(raw.protocol ?? '').slice(0, 10),
+        ip: String(raw.ip ?? '').slice(0, 64),
+        // status 1 = done; 2 = failed, 3 = over the quota
+        ok: Number(raw.status ?? 1) === 1,
+    };
+    if (raw.virtual_target_path) event.target = String(raw.virtual_target_path).slice(0, 500);
+    if (raw.file_size !== undefined && Number.isFinite(Number(raw.file_size))) event.size = Number(raw.file_size);
+    writing = writing
+        .then(async () => {
+            const file = eventsFile();
+            await fs.mkdir(path.dirname(file), { recursive: true });
+            await fs.appendFile(file, `${JSON.stringify(event)}\n`, 'utf8');
+            const st = await fs.stat(file);
+            if (st.size > MAX_EVENTS_BYTES) {
+                const lines = (await fs.readFile(file, 'utf8')).split('\n').filter(Boolean).slice(-KEEP_EVENTS);
+                await fs.writeFile(`${file}.tmp`, `${lines.join('\n')}\n`, 'utf8');
+                await fs.rename(`${file}.tmp`, file);
+            }
+        })
+        .catch((error: Error) => logWarn('FTP', `Could not record an FTP event: ${error.message}`));
+    return writing;
+}
+
+export async function readFtpEvents(options: { serverId?: number; limit?: number; uploadsOnly?: boolean } = {}): Promise<FtpEvent[]> {
+    const limit = Math.max(1, Math.min(2000, options.limit ?? 300));
+    let lines: string[] = [];
+    try {
+        lines = (await fs.readFile(eventsFile(), 'utf8')).split('\n').filter(Boolean);
+    } catch {
+        return [];
+    }
+    const events: FtpEvent[] = [];
+    for (let i = lines.length - 1; i >= 0 && events.length < limit; i--) {
+        try {
+            const event = JSON.parse(lines[i]) as FtpEvent;
+            if (options.serverId !== undefined && event.serverId !== options.serverId) continue;
+            if (options.uploadsOnly && event.action !== 'upload') continue;
+            events.push(event);
+        } catch {
+            // a broken line
+        }
+    }
+    return events;
+}
+
+export type FtpConnection = {
+    id: string;
+    username: string;
+    serverId: number | null;
+    protocol: string;
+    address: string;
+    since: number;
+    lastActivity: number;
+    command: string;
+    transfers: Array<{ type: string; path: string; size: number; since: number }>;
+};
+
+export async function listFtpConnections(): Promise<FtpConnection[]> {
+    const config = await requireConfig();
+    const { data } = await api<Array<Record<string, unknown>>>(config, 'GET', '/connections');
+    return (data ?? []).map((c) => {
+        const username = String(c.username ?? '');
+        const id = /^ftp(\d+)$/.exec(username)?.[1];
+        return {
+            id: String(c.connection_id ?? ''),
+            username,
+            serverId: id ? Number(id) : null,
+            protocol: String(c.protocol ?? ''),
+            address: String(c.remote_address ?? '').replace(/:\d+$/, ''),
+            since: Number(c.connection_time) || 0,
+            lastActivity: Number(c.last_activity) || 0,
+            command: String(c.command ?? ''),
+            transfers: ((c.active_transfers as Array<Record<string, unknown>> | undefined) ?? []).map((t) => ({
+                type: String(t.operation_type ?? ''),
+                path: String(t.path ?? ''),
+                size: Number(t.size) || 0,
+                since: Number(t.start_time) || 0,
+            })),
+        };
+    });
+}
+
+export async function kickFtpConnection(connectionId: string): Promise<void> {
+    if (!/^[A-Za-z0-9_-]{1,200}$/.test(connectionId)) throw fail('Invalid connection', 400);
+    const config = await requireConfig();
+    const { status } = await api(config, 'DELETE', `/connections/${connectionId}`);
+    if (status === 404) throw fail('That connection has already ended', 404);
 }

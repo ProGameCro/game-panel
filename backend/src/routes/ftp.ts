@@ -3,7 +3,7 @@ import { authMiddleware, requireServerPermission, type AuthenticatedRequest } fr
 import { PERMISSIONS } from '../permissions.js';
 import { serverRepository } from '../database/index.js';
 import { parsePositiveIntId } from '../utils/ids.js';
-import { deleteFtpAccount, ensureFtpAccount, ftpInfo } from '../services/ftp.js';
+import { checkFtpHookKey, deleteFtpAccount, ensureFtpAccount, ftpInfo, recordFtpEvent } from '../services/ftp.js';
 
 // FTP / FTPS / SFTP access to one server's files (gp-ftp.sh): the address, the account and its password.
 // Seeing it needs the server's file read permission, opening / resetting / closing it the file write permission.
@@ -19,6 +19,13 @@ async function serverId(req: AuthenticatedRequest): Promise<number> {
     if (!id || !(await serverRepository.findById(id))) throw Object.assign(new Error('Server not found'), { statusCode: 404 });
     return id;
 }
+
+// the FTP service (gp-ftp.sh) reports every upload, download, delete, rename and new folder here, with its key
+router.post('/events', async (req, res: Response) => {
+    if (!(await checkFtpHookKey(req.query.key))) return res.status(403).json({ error: 'Forbidden' });
+    if (req.body && typeof req.body === 'object') await recordFtpEvent(req.body as Record<string, unknown>);
+    return res.json({ ok: true });
+});
 
 router.get('/:id', authMiddleware, requireServerPermission(PERMISSIONS.fs.read), async (req: AuthenticatedRequest, res: Response) => {
     try {

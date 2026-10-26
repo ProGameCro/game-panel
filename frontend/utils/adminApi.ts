@@ -43,6 +43,29 @@ export type FtpOverview = {
   sftpPort: number | null;
   servers: Array<{ id: number; name: string; username: string | null; password: string | null }>;
 };
+export type FtpEvent = {
+  time: number;
+  serverId: number | null;
+  username: string;
+  action: string;
+  path: string;
+  target?: string;
+  size?: number;
+  protocol: string;
+  ip: string;
+  ok: boolean;
+};
+export type FtpConnection = {
+  id: string;
+  username: string;
+  serverId: number | null;
+  protocol: string;
+  address: string;
+  since: number;
+  lastActivity: number;
+  command: string;
+  transfers: Array<{ type: string; path: string; size: number; since: number }>;
+};
 export type PanelTheme = 'orange' | 'cyan' | 'dark' | 'light';
 export type ActivityEntry = { time: number; user: string | null; method: string; path: string; status: number; detail?: string };
 
@@ -94,6 +117,10 @@ export const adminApi = {
     req<{ name: string | null; defaultTheme: PanelTheme; loginFooter: string }>('put', '/appearance', patch),
   ftp: () => req<FtpOverview>('get', '/ftp'),
   ftpOpen: (id: number, reset = false) => req<{ username: string; password: string }>('post', `/ftp/${id}`, { reset }),
+  ftpEvents: (serverId?: number, uploadsOnly = false) =>
+    req<{ events: FtpEvent[] }>('get', '/ftp/events', undefined, { serverId, uploads: uploadsOnly ? '1' : undefined, limit: 500 }),
+  ftpConnections: () => req<{ connections: FtpConnection[] }>('get', '/ftp/connections'),
+  ftpKick: (connectionId: string) => req<{ success: boolean }>('delete', `/ftp/connections/${encodeURIComponent(connectionId)}`),
   ftpClose: (id: number) => req<{ success: boolean }>('delete', `/ftp/${id}`),
   activity: (limit = 300) => req<{ entries: ActivityEntry[] }>('get', '/activity', undefined, { limit }),
 };

@@ -10,7 +10,7 @@ export type ActivityEntry = { time: number; user: string | null; method: string;
 const MAX_BYTES = 2 * 1024 * 1024;
 const KEEP_LINES = 5000;
 // noisy or sensitive requests that are not worth a line
-const SKIP = [/^\/api\/auth\/(login|refresh)/, /\/files\/upload/, /\/download-token$/, /\/terminal/];
+const SKIP = [/^\/api\/auth\/(login|refresh)/, /\/files\/upload/, /\/download-token$/, /\/terminal/, /^\/api\/ftp\/events/];
 
 function logFile(): string {
     return path.join(getConfig().gamepanelDataDir, 'activity.jsonl');

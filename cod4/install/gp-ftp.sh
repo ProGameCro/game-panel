@@ -6,6 +6,8 @@
 #    SFTP on port 2022. Files uploaded this way belong to the game server's user, so the server can use them.
 #  - Runs SFTPGo (container gamepanel-ftp); the panel manages the accounts through its API on the panel's own
 #    network (not published). Too many wrong logins from one address block it for a while.
+#  - Every upload, download, delete, rename and new folder is reported to the panel: Admin > FTP shows what each
+#    server's account did (file, size, protocol, address) and who is connected now, with a button to disconnect.
 # Usage (as root):
 #   bash gp-ftp.sh                       install / update (safe to run again; accounts and passwords stay)
 #   FTP_PORT=2121 SFTP_PORT=2222 bash gp-ftp.sh   other ports (FTP_PASSIVE=50000-50100 for the passive range)
@@ -66,12 +68,20 @@ EDGE="$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {
 le="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/letsencrypt"}}{{.Source}}{{end}}{{end}}' "$traefik")"
 ACME=""; [[ -n $le ]] && ACME="$le/acme.json"
 
+# the panel's backend: the FTP service reports every upload, download, delete ... to it (Admin > FTP > Activity)
+backend="$(docker ps --format '{{.Names}}' --filter label=com.docker.compose.project=gamepanel --filter label=com.docker.compose.service=backend | head -1)"
+API_PORT="$(grep -E '^PORT=' "$APP_ROOT/deploy/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' ")"
+[[ -n $backend && $API_PORT =~ ^[0-9]+$ ]] || { echo "Backend panela ne radi ili PORT nije u $APP_ROOT/deploy/.env. Pokreni panel pa ponovno."; exit 1; }
+
 mkdir -p "$ETC/data" "$ETC/certs" "$STATE"
 chmod 700 "$ETC"
 # the panel's admin login to the FTP service: made once, kept
 [[ -s $ETC/admin.pass ]] || { python3 -c "import secrets,string; print(''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(32)))" > "$ETC/admin.pass"; }
 chmod 600 "$ETC/admin.pass"
 ADMIN_PASS="$(cat "$ETC/admin.pass")"
+[[ -s $ETC/hook.key ]] || { python3 -c "import secrets; print(secrets.token_hex(24))" > "$ETC/hook.key"; }
+chmod 600 "$ETC/hook.key"
+HOOK_KEY="$(cat "$ETC/hook.key")"
 
 # ---- 1) FTPS certificate: the panel's one from Traefik, renewed with it --------------------------------------------
 cat > "$ETC/cert.py" <<'PY'
@@ -149,6 +159,8 @@ docker run -d --name $NAME --restart unless-stopped --user 0:0 \
   -e SFTPGO_HTTPD__BINDINGS__0__PORT=8080 \
   -e SFTPGO_HTTPD__BINDINGS__0__ENABLE_WEB_ADMIN=false -e SFTPGO_HTTPD__BINDINGS__0__ENABLE_WEB_CLIENT=false \
   -e SFTPGO_COMMON__DEFENDER__ENABLED=true \
+  -e SFTPGO_COMMON__ACTIONS__EXECUTE_ON=upload,download,delete,rename,mkdir,rmdir \
+  -e "SFTPGO_COMMON__ACTIONS__HOOK=http://$backend:$API_PORT/api/ftp/events?key=$HOOK_KEY" \
   $IMAGE >/dev/null
 docker network connect "$EDGE" $NAME
 ok=""
@@ -161,7 +173,7 @@ done
 # the panel reads this (Settings > Game config > FTP access, Admin > FTP); only the panel's backend can read it
 umask 077
 cat > "$STATE/ftp.json" <<JSON
-{"api": "http://$NAME:8080", "admin": "panel", "password": "$ADMIN_PASS", "host": "$DOMAIN", "ftpPort": $FTP_PORT, "sftpPort": $SFTP_PORT, "serversDir": "/srv/servers"}
+{"api": "http://$NAME:8080", "admin": "panel", "password": "$ADMIN_PASS", "host": "$DOMAIN", "ftpPort": $FTP_PORT, "sftpPort": $SFTP_PORT, "serversDir": "/srv/servers", "hookKey": "$HOOK_KEY"}
 JSON
 umask 022
 

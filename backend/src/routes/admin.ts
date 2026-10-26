@@ -16,7 +16,7 @@ import { backupServerConfigs, deleteBackup, listBackups, runAutoBackup, startAut
 import { checkCod4Files, cod4FilesDir, cod4FilesHostDir } from '../providers/linuxgsm/adapters/cod4/index.js';
 import { certificateInfo } from '../services/cod4/cert.js';
 import { writeBranding } from './branding.js';
-import { ensureFtpAccount, deleteFtpAccount, ftpRunning, listFtpAccounts, readFtpConfig } from '../services/ftp.js';
+import { ensureFtpAccount, deleteFtpAccount, ftpRunning, kickFtpConnection, listFtpAccounts, listFtpConnections, readFtpConfig, readFtpEvents } from '../services/ftp.js';
 
 // Admin page (Super Admins): everything the panel can tell about the servers' add-ons (B3, FastDL), the host and what
 // needs attention, in one call. Server status, metrics and players come from the endpoints the panel already uses.
@@ -1103,6 +1103,36 @@ router.get('/ftp', async (_req: AuthenticatedRequest, res: Response) => {
         });
     } catch (error) {
         return fail(res, error, 'Could not list the FTP accounts');
+    }
+});
+
+// what users did over FTP (newest first) and who is connected now
+router.get('/ftp/events', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const serverId = req.query.serverId ? Number(req.query.serverId) : undefined;
+        if (serverId !== undefined && !Number.isInteger(serverId)) throw badRequest('Invalid server');
+        const events = await readFtpEvents({ serverId, limit: Number(req.query.limit) || 300, uploadsOnly: req.query.uploads === '1' });
+        return res.json({ events });
+    } catch (error) {
+        return fail(res, error, 'Could not read the FTP activity');
+    }
+});
+
+router.get('/ftp/connections', async (_req: AuthenticatedRequest, res: Response) => {
+    try {
+        return res.json({ connections: await listFtpConnections() });
+    } catch (error) {
+        return fail(res, error, 'Could not read the FTP connections');
+    }
+});
+
+router.delete('/ftp/connections/:connectionId', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        await kickFtpConnection(req.params.connectionId);
+        res.locals.activityDetail = `FTP connection ${req.params.connectionId} closed`;
+        return res.json({ success: true });
+    } catch (error) {
+        return fail(res, error, 'Could not close the connection');
     }
 });
 
