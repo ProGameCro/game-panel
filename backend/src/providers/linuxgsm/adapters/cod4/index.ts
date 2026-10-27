@@ -274,23 +274,63 @@ export function cod4MaxPlayers(env: string[] | undefined): number | null {
 }
 
 
+// what a new server gets: chosen per server in the install form (Admin > CoD4 files only fills the form in);
+// installs without them (API) use the Admin defaults
+export type Cod4InstallOptions = { mod: string; fastdl: boolean; b3: boolean; serverCfg: string };
+
+const MOD_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/;
+
+// install form -> installSecrets (kept for the install only, not with the server)
+export function takeCod4InstallOptions(value: unknown): Record<string, string> {
+    if (!value || typeof value !== 'object') return {};
+    const o = value as Record<string, unknown>;
+    const mod = String(o.mod ?? '').trim();
+    if (mod && (!MOD_PATTERN.test(mod) || mod.startsWith('.'))) {
+        throw Object.assign(new Error('Mod: letters, numbers, dot, dash and underscore'), { statusCode: 400 });
+    }
+    const serverCfg = String(o.serverCfg ?? '');
+    if (serverCfg.length > 200_000) throw Object.assign(new Error('The server.cfg is too long'), { statusCode: 400 });
+    return { cod4Mod: mod, cod4FastDl: o.fastdl ? '1' : '0', cod4B3: o.b3 ? '1' : '0', cod4ServerCfg: serverCfg };
+}
+
+export async function cod4InstallOptions(secrets?: Record<string, string>): Promise<Cod4InstallOptions> {
+    const { cod4Defaults } = await readAdminSettings();
+    if (!secrets || secrets.cod4FastDl === undefined) {
+        return { mod: cod4Defaults.mod, fastdl: cod4Defaults.fastdl, b3: cod4Defaults.b3, serverCfg: cod4Defaults.serverCfg };
+    }
+    return { mod: secrets.cod4Mod ?? '', fastdl: secrets.cod4FastDl === '1', b3: secrets.cod4B3 === '1', serverCfg: secrets.cod4ServerCfg ?? '' };
+}
+
+// the mods in the cod4-linux folder (install form)
+export async function listCod4Mods(): Promise<string[]> {
+    const entries = await fs.readdir(path.join(cod4FilesDir(), 'mods'), { withFileTypes: true }).catch(() => []);
+    return entries.filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name).sort((a, b) => a.localeCompare(b));
+}
+
+// the mod when this server's files have it, else none
+async function existingMod(dataDir: string, mod: string): Promise<string> {
+    if (!mod) return '';
+    return (await fs.stat(path.join(dataDir, 'serverfiles', 'mods', mod)).catch(() => null))?.isDirectory() ? mod : '';
+}
+
 // the game files of a new server, or of a reinstalled one (server Settings > Game config > Reinstall): linked from the
-// cod4-linux folder, the starting server.cfg (Admin > CoD4 files) and the server's name in it
+// cod4-linux folder, the starting server.cfg (the install form; a reinstall keeps the server's own) and the server's name in it
 export async function prepareCod4ServerFiles(
     dataDir: string,
     gameServerName: string,
     serverName?: string | null,
-    progress?: LinkCount
+    progress?: LinkCount,
+    serverCfg?: string
 ): Promise<LinkCount | null> {
     // checked again here: the folder may have changed since the install was requested
     await assertCod4FilesReady();
     const count = await linkCod4Files(dataDir, progress);
-    const { cod4Defaults } = await readAdminSettings();
-    if (cod4Defaults.serverCfg.trim()) {
+    const startCfg = serverCfg ?? (await readAdminSettings()).cod4Defaults.serverCfg;
+    if (startCfg.trim()) {
         const cfg = path.join(dataDir, 'serverfiles', 'main', `${path.basename(gameServerName)}.cfg`);
         await fs.mkdir(path.dirname(cfg), { recursive: true });
         await fs.rm(cfg, { force: true });
-        await fs.writeFile(cfg, cod4Defaults.serverCfg.endsWith('\n') ? cod4Defaults.serverCfg : `${cod4Defaults.serverCfg}\n`, 'utf8');
+        await fs.writeFile(cfg, startCfg.endsWith('\n') ? startCfg : `${startCfg}\n`, 'utf8');
     }
     await ensureServerConfig(dataDir, gameServerName);
     if (serverName) await setCod4Hostname(dataDir, gameServerName, serverName);
@@ -306,15 +346,13 @@ export const cod4Adapter: GameAdapter = {
                 { fileName: `${ctx.gameServerName}.cfg`, values: { maxplayers: String(slots) } },
             ]);
         }
-        const count = await prepareCod4ServerFiles(ctx.dataDir, ctx.gameServerName, ctx.serverName);
-        const { cod4Defaults } = await readAdminSettings();
-        const mod = cod4Defaults.mod && (await fs.stat(path.join(ctx.dataDir, 'serverfiles', 'mods', cod4Defaults.mod)).catch(() => null))?.isDirectory()
-            ? cod4Defaults.mod
-            : '';
-        if (cod4Defaults.mod && !mod) logInfo('LINUXGSM:COD4', `Default mod ${cod4Defaults.mod} is not in the files, left out`, { serverId: ctx.serverId });
+        const options = await cod4InstallOptions(ctx.installSecrets);
+        const count = await prepareCod4ServerFiles(ctx.dataDir, ctx.gameServerName, ctx.serverName, undefined, options.serverCfg);
+        const mod = await existingMod(ctx.dataDir, options.mod);
+        if (options.mod && !mod) logInfo('LINUXGSM:COD4', `Mod ${options.mod} is not in the files, left out`, { serverId: ctx.serverId });
         // a new server gets its RCON password from the install form and its own FastDL link (when FastDL is installed)
         const rconPassword = ctx.installSecrets?.rconPassword;
-        const fastDlUrl = cod4Defaults.fastdl ? await cod4FastDlUrl(ctx.serverId) : null;
+        const fastDlUrl = options.fastdl ? await cod4FastDlUrl(ctx.serverId) : null;
         if (rconPassword || fastDlUrl || mod) {
             await setCod4StartParameters(ctx.dataDir, ctx.gameServerName, { rconPassword, fastDlUrl, mod });
             if (fastDlUrl) logInfo('LINUXGSM:COD4', `FastDL: ${fastDlUrl}`, { serverId: ctx.serverId });
@@ -326,12 +364,10 @@ export const cod4Adapter: GameAdapter = {
         }
     },
     async afterContainerStart(ctx: AfterContainerStartContext): Promise<void> {
-        // B3 for new servers (Admin page): in the background, the install does not wait for it
-        const { cod4Defaults } = await readAdminSettings();
-        if (!cod4Defaults.b3) return;
-        const mod = cod4Defaults.mod && (await fs.stat(path.join(getServerStoragePaths(ctx.serverId).dataDir, 'serverfiles', 'mods', cod4Defaults.mod)).catch(() => null))?.isDirectory()
-            ? cod4Defaults.mod
-            : '';
+        // B3 when the install form asked for it: in the background, the install does not wait for it
+        const options = await cod4InstallOptions(ctx.installSecrets);
+        if (!options.b3) return;
+        const mod = await existingMod(getServerStoragePaths(ctx.serverId).dataDir, options.mod);
         void autoInstallB3(ctx.serverId, mod);
     },
 };

@@ -3,7 +3,7 @@ import { normalizeMountsPayload } from '../../utils/mounts.js';
 import { asOptionalString, normalizeEnvPayload } from '../installPayload.js';
 import type { ProviderInstallContext, ResolvedInstallSpec } from '../installTypes.js';
 import { getProviderRuntimeIdentity, runtimeConfigForIdentity } from '../runtimeIdentity.js';
-import { assertCod4FilesReady, COD4_LOCAL_IMAGE, takeCod4RconPassword } from './adapters/cod4/index.js';
+import { assertCod4FilesReady, COD4_LOCAL_IMAGE, takeCod4InstallOptions, takeCod4RconPassword } from './adapters/cod4/index.js';
 
 function normalizeLinuxGsmEnv(payload: unknown): string[] {
     let env = normalizeEnvPayload(payload);
@@ -43,6 +43,8 @@ export async function resolveLinuxGsmInstallSpec(
         const taken = takeCod4RconPassword(env);
         env = taken.env;
         if (taken.password) installSecrets.rconPassword = taken.password;
+        // mod, FastDL, B3 and the starting server.cfg chosen for this server
+        Object.assign(installSecrets, takeCod4InstallOptions(ctx.body.cod4Options));
     }
 
     return {

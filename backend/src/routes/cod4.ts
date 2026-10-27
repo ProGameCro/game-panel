@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Router, type Response } from 'express';
-import { checkCod4Files } from '../providers/linuxgsm/adapters/cod4/index.js';
+import { checkCod4Files, listCod4Mods } from '../providers/linuxgsm/adapters/cod4/index.js';
 import { authMiddleware, requireServerPermission, type AuthenticatedRequest } from '../middleware/auth.js';
 import { getConfig } from '../config.js';
 import { PERMISSIONS } from '../permissions.js';
@@ -17,7 +17,14 @@ const router = Router();
 
 router.get('/files', authMiddleware, async (_req: AuthenticatedRequest, res: Response) => {
     try {
-        res.json({ ...(await checkCod4Files()), defaultSlots: (await readAdminSettings()).cod4Defaults.slots });
+        // the install form starts from the Admin defaults and offers the mods in the cod4-linux folder
+        const { cod4Defaults } = await readAdminSettings();
+        res.json({
+            ...(await checkCod4Files()),
+            defaultSlots: cod4Defaults.slots,
+            defaults: { mod: cod4Defaults.mod, fastdl: cod4Defaults.fastdl, b3: cod4Defaults.b3, serverCfg: cod4Defaults.serverCfg },
+            mods: await listCod4Mods(),
+        });
     } catch (error) {
         res.status(500).json({ error: error instanceof Error ? error.message : 'Could not check the CoD4 files' });
     }

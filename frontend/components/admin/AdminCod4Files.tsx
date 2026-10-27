@@ -70,7 +70,7 @@ export function AdminCod4Files() {
       const next = await adminApi.saveSettings({ cod4Defaults: defaults });
       setDefaults(next.cod4Defaults);
       setSavedDefaults(next.cod4Defaults);
-      setResult({ ok: true, text: 'Defaults for new servers saved.' });
+      setResult({ ok: true, text: 'Install form defaults saved.' });
     } catch (e) {
       setResult({ ok: false, text: apiError(e, 'Could not save.') });
     } finally {
@@ -148,7 +148,7 @@ export function AdminCod4Files() {
       </Panel>
 
       <Panel
-        title="New CoD4 servers get"
+        title="Install form defaults (new CoD4 servers)"
         icon={<SlidersHorizontal className="h-4 w-4" />}
         actions={
           <SmallButton tone="good" disabled={busy || !dirty} onClick={() => void saveDefaults()}>
@@ -191,7 +191,8 @@ export function AdminCod4Files() {
               </label>
             </div>
             <p className="text-xs text-gray-400">
-              The mod is used only when the cod4-linux folder has it in mods/. B3 needs gp-b3.sh on the panel server; it is set up a minute after the
+              These only fill in the install form: every new server can get its own mod, FastDL, B3 and server.cfg there. The mod is used only
+              when the cod4-linux folder has it in mods/. B3 needs gp-b3.sh on the panel server; it is set up a minute after the
               first start.
             </p>
             <label className="flex flex-col gap-1 text-xs text-gray-400">

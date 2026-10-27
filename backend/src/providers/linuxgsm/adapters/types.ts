@@ -21,6 +21,8 @@ export type AfterContainerStartContext = {
     serverId: number;
     shortname: string;
     containerId: string;
+    // the same install form values as in BeforeContainerCreateContext
+    installSecrets?: Record<string, string>;
 };
 
 export interface GameAdapter {

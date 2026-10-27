@@ -147,10 +147,12 @@ async function runReinstall(server: GameServerRow, gameServerName: string, statu
                 }
             }
         }
+        // the server keeps its own server.cfg (not the starting one of new servers)
+        const ownCfg = await fs.readFile(path.join(serverfiles, 'main', `${path.basename(gameServerName)}.cfg`), 'utf8').catch(() => undefined);
         status.step = 'removing';
         await fs.rm(serverfiles, { recursive: true, force: true });
         status.step = 'copying';
-        await prepareCod4ServerFiles(dataDir, gameServerName, server.name, count);
+        await prepareCod4ServerFiles(dataDir, gameServerName, server.name, count, ownCfg);
         status.done = count.linked + count.copied;
         status.step = 'restoring';
         for (const section of kept) {

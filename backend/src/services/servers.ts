@@ -184,6 +184,7 @@ export async function installServerAsync(
                 serverId,
                 shortname: spec.catalogId ?? '',
                 containerId: containerInfo.id,
+                installSecrets: spec.installSecrets,
             });
         }
 

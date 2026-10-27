@@ -365,6 +365,8 @@ interface ConfigModalProps {
   showRustFields?: boolean;
   showValheimFields?: boolean;
   showCod4Fields?: boolean;
+  cod4Options?: Cod4InstallOptions;
+  setCod4Options?: (v: Cod4InstallOptions) => void;
   usedServerNames?: string[];
   requireSteamCredentials?: boolean;
   steamUsername?: string;
@@ -401,6 +403,9 @@ function generatePalworldAdminPassword(): string {
 // CoD4 RCON password: up to 8 letters and numbers (a longer one or special characters give "Bad rcon").
 // Generated with 8 characters: at least one small letter, one capital and one number.
 const COD4_RCON_PATTERN = /^[A-Za-z0-9]{1,8}$/;
+// what this CoD4 server gets (filled in from Admin > CoD4 files, changed here per server)
+export type Cod4InstallOptions = { mod: string; fastdl: boolean; b3: boolean; serverCfg: string };
+const EMPTY_COD4_OPTIONS: Cod4InstallOptions = { mod: '', fastdl: true, b3: false, serverCfg: '' };
 function generateCod4RconPassword(): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
   const bytes = new Uint32Array(8);
@@ -420,6 +425,8 @@ function ConfigModal({
   showRustFields,
   showValheimFields,
   showCod4Fields,
+  cod4Options = EMPTY_COD4_OPTIONS,
+  setCod4Options,
   usedServerNames,
   requireSteamCredentials, steamUsername, setSteamUsername, steamPassword, setSteamPassword,
   requireGameCopy,
@@ -537,6 +544,9 @@ function ConfigModal({
   const [cod4Files, setCod4Files] = React.useState<Cod4FilesStatus | null>(null);
   const [cod4FilesError, setCod4FilesError] = React.useState<string | null>(null);
   const [cod4DefaultSlots, setCod4DefaultSlots] = React.useState<number | null>(null);
+  const [cod4Mods, setCod4Mods] = React.useState<string[]>([]);
+  const [cod4CfgOpen, setCod4CfgOpen] = React.useState(false);
+  const cod4OptionsFilled = React.useRef(false);
   React.useEffect(() => {
     // only while the form still shows the built-in 32
     if (showCod4Fields && cod4DefaultSlots !== null && cod4DefaultSlots !== 32 && cod4Slots === '32') setCod4Slots(String(cod4DefaultSlots));
@@ -552,8 +562,17 @@ function ConfigModal({
         // Admin → CoD4 files: slots of new servers
         const slots = (status as Cod4FilesStatus & { defaultSlots?: number }).defaultSlots;
         if (typeof slots === 'number') setCod4DefaultSlots(slots);
+        const extra = status as Cod4FilesStatus & { mods?: string[]; defaults?: Cod4InstallOptions };
+        const mods = Array.isArray(extra.mods) ? extra.mods : [];
+        setCod4Mods(mods);
+        // once per form: the Admin defaults (a mod the folder does not have is left out)
+        if (extra.defaults && !cod4OptionsFilled.current) {
+          cod4OptionsFilled.current = true;
+          setCod4Options?.({ ...extra.defaults, mod: mods.includes(extra.defaults.mod) ? extra.defaults.mod : '' });
+        }
       })
       .catch((e) => setCod4FilesError(e?.response?.data?.error ?? 'Could not check the CoD4 files.'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   React.useEffect(() => {
     if (showCod4Fields) checkCod4Files();
@@ -759,6 +778,74 @@ function ConfigModal({
               {cod4RconInvalid && (
                 <p className="mt-1.5 text-xs text-red-400">Up to 8 characters: small and capital letters and numbers only.</p>
               )}
+            </div>
+          )}
+
+          {showCod4Fields && setCod4Options && (
+            <div className="space-y-4">
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                  Mod
+                  <InfoTip text="The mod this server starts with (+set fs_game mods/...). The list is the mods/ folder of cod4-linux. You can change it later in Settings > Game config." />
+                </label>
+                <select
+                  value={cod4Options.mod}
+                  onChange={(e) => setCod4Options({ ...cod4Options, mod: e.target.value })}
+                  className={`${inputCls} max-w-sm`}
+                >
+                  <option value="">No mod (stock game)</option>
+                  {cod4Mods.map((mod) => (
+                    <option key={mod} value={mod}>{mod}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={cod4Options.fastdl}
+                    onChange={(e) => setCod4Options({ ...cod4Options, fastdl: e.target.checked })}
+                  />
+                  FastDL (players download mods and maps over HTTP)
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={cod4Options.b3}
+                    onChange={(e) => setCod4Options({ ...cod4Options, b3: e.target.checked })}
+                  />
+                  Install B3 (Big Brother Bot)
+                </label>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setCod4CfgOpen((v) => !v)}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                  aria-expanded={cod4CfgOpen}
+                >
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${cod4CfgOpen ? 'rotate-180' : ''}`} />
+                  Starting server.cfg
+                  <span className="normal-case font-normal tracking-normal">
+                    {cod4Options.serverCfg.trim() ? `(${cod4Options.serverCfg.trimEnd().split('\n').length} lines)` : '(default of cod4-linux)'}
+                  </span>
+                </button>
+                {cod4CfgOpen && (
+                  <>
+                    <textarea
+                      value={cod4Options.serverCfg}
+                      onChange={(e) => setCod4Options({ ...cod4Options, serverCfg: e.target.value })}
+                      rows={12}
+                      spellCheck={false}
+                      placeholder="Empty: the server.cfg from the cod4-linux folder"
+                      className={`${inputCls} mt-2 font-mono text-xs`}
+                    />
+                    <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                      Only for this server. The server name is set from the form; the RCON password stays on the startup line.
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
           )}
 
@@ -1163,6 +1250,7 @@ export function InstallGameServer({
   const [configSubtitle, setConfigSubtitle] = useState('');
   const [configProvider, setConfigProvider] = useState<'ovhcloud' | 'linuxgsm' | undefined>(undefined);
   const [configShowEnv, setConfigShowEnv] = useState(false);
+  const [cod4Options, setCod4Options] = useState<Cod4InstallOptions>(EMPTY_COD4_OPTIONS);
   const [configRequireEula, setConfigRequireEula] = useState(false);
   const [serverName, setServerName] = useState('');
   const isSuperAdmin = useIsSuperAdmin();
@@ -1337,6 +1425,7 @@ export function InstallGameServer({
     setConfigSubtitle('');
     setConfigProvider('linuxgsm');
     setShowCod4(game.shortname === 'cod4');
+    setCod4Options(EMPTY_COD4_OPTIONS);
     setServerName(makeUniqueServerName(`${game.gamename} Server`, usedServerNames));
     setTcpPorts([]);
     setUdpPorts([]);
@@ -1409,6 +1498,7 @@ export function InstallGameServer({
       ...(isLgsm && requireSteamCredentials ? { requireSteamCredentials: true, steamUsername: steamUsername.trim(), steamPassword: steamPassword } : {}),
       resourceLimits: (cpuVal > 0 || memVal > 0) ? { cpu: cpuVal > 0 ? cpuVal : 0, memoryMb: memVal > 0 ? memVal : 0 } : null,
       ...(isSuperAdmin ? ownerPayload(owner) : {}),
+      ...(isLgsm && showCod4 ? { cod4Options } : {}),
     };
     // the next server starts with a fresh owner form
     setOwner({ mode: 'new', username: '', password: generateOwnerPassword() });
@@ -1874,6 +1964,8 @@ export function InstallGameServer({
           showRustFields={showRust}
           showValheimFields={showValheim}
           showCod4Fields={showCod4}
+          cod4Options={cod4Options}
+          setCod4Options={setCod4Options}
           usedServerNames={usedServerNames}
           requireSteamCredentials={requireSteamCredentials || undefined}
           steamUsername={steamUsername}
