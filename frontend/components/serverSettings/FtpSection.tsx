@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, ChevronDown, Copy, Eye, EyeOff, HardDriveUpload, KeyRound, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Copy, Eye, EyeOff, HardDriveUpload, KeyRound, Trash2, UserPlus } from 'lucide-react';
 import { apiClient } from '../../utils/api';
-import { AppButton } from '../../src/ui/components';
 import { ConfirmationModal } from '../ConfirmationModal';
 
 // FTP / FTPS / SFTP access to this server's files (gp-ftp.sh): one account per server, its home is serverfiles.
@@ -45,6 +44,39 @@ function CopyField({ label, value, secret, textSecondary }: { label: string; val
         </button>
       </div>
     </div>
+  );
+}
+
+// the card's buttons: tinted, with an icon, like Start / Stop / Reinstall
+const BUTTON_TONES = {
+  good: 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200',
+  neutral: 'border-sky-500/50 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 hover:text-sky-200',
+  danger: 'border-red-500/60 bg-red-500/15 text-red-300 hover:bg-red-500/25 hover:text-red-200',
+} as const;
+
+function CardButton({
+  tone,
+  icon: Icon,
+  disabled,
+  onClick,
+  children,
+}: {
+  tone: keyof typeof BUTTON_TONES;
+  icon: typeof KeyRound;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_TONES[tone]}`}
+    >
+      <Icon className="h-4 w-4" />
+      {children}
+    </button>
   );
 }
 
@@ -158,9 +190,9 @@ export function FtpSection({
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <p className={`text-sm ${textSecondary}`}>This server has no FTP account yet.</p>
           {canWrite && (
-            <AppButton tone="primary" disabled={busy} onClick={() => void run(() => apiClient.ftpRequest<FtpInfo>('post', serverId))}>
+            <CardButton tone="good" icon={UserPlus} disabled={busy} onClick={() => void run(() => apiClient.ftpRequest<FtpInfo>('post', serverId))}>
               {busy ? 'Opening…' : 'Open FTP account'}
-            </AppButton>
+            </CardButton>
           )}
         </div>
       )}
@@ -181,16 +213,12 @@ export function FtpSection({
           </p>
           {canWrite && (
             <div className="mt-3 flex flex-wrap gap-2">
-              <AppButton tone="ghost" disabled={busy} onClick={() => setConfirm('reset')}>
-                <span className="inline-flex items-center gap-2">
-                  <KeyRound className="h-4 w-4" /> New password
-                </span>
-              </AppButton>
-              <AppButton tone="ghost" disabled={busy} onClick={() => setConfirm('close')}>
-                <span className="inline-flex items-center gap-2 text-red-300">
-                  <Trash2 className="h-4 w-4" /> Close account
-                </span>
-              </AppButton>
+              <CardButton tone="neutral" icon={KeyRound} disabled={busy} onClick={() => setConfirm('reset')}>
+                New password
+              </CardButton>
+              <CardButton tone="danger" icon={Trash2} disabled={busy} onClick={() => setConfirm('close')}>
+                Close account
+              </CardButton>
             </div>
           )}
         </>
