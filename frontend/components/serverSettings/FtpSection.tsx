@@ -101,8 +101,8 @@ export function FtpSection({
         <HardDriveUpload className="h-4 w-4 text-sky-300" /> FTP access
       </h3>
       <p className={`mt-1 text-sm ${textSecondary}`}>
-        Upload mods, maps and configs with FileZilla or any FTP / SFTP program. The account sees this server's files (serverfiles), like the File
-        Manager.
+        Upload mods, maps and configs with FileZilla or any FTP / SFTP program. The account sees this server's files, the same as the File
+        Manager below.
       </p>
 
       {error && <p className="mt-3 text-sm text-red-300">{error}</p>}

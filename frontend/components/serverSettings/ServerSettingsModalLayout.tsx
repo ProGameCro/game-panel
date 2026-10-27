@@ -5,6 +5,7 @@ import { useBodyScrollLock } from '../../src/ui/utils/useBodyScrollLock';
 import { useFocusTrap } from '../../src/ui/utils/useFocusTrap';
 import { useMediaQuery } from '../../src/ui/utils/useMediaQuery';
 import type { SettingsTab } from './access';
+import { FtpSection } from './FtpSection';
 import { ProviderLogo } from '../gameServersTable/ProviderBadge';
 
 interface ServerSettingsModalLayoutProps {
@@ -27,6 +28,8 @@ interface ServerSettingsModalLayoutProps {
   tabButtonClass: (tab: SettingsTab) => string;
   activeTab: SettingsTab;
   fileManagerContent: ReactNode;
+  // FTP access card above the files (gp-ftp.sh); null: no card
+  ftpServerId?: number | null;
   backupContent: ReactNode;
   gameConfigContent: ReactNode;
   terminalContent: ReactNode;
@@ -53,6 +56,7 @@ export function ServerSettingsModalLayout({
   tabButtonClass,
   activeTab,
   fileManagerContent,
+  ftpServerId,
   backupContent,
   gameConfigContent,
   containerConfigContent,
@@ -215,7 +219,23 @@ export function ServerSettingsModalLayout({
                 </div>
               </div>
             )}
-            {activeTab === 'filemanager' && canAccessTab('filemanager') && fileManagerContent}
+            {activeTab === 'filemanager' && canAccessTab('filemanager') && (
+              <>
+                {ftpServerId ? (
+                  <div className="px-3 pt-3 sm:px-4 sm:pt-4 md:px-6 md:pt-6">
+                    <FtpSection
+                      serverId={ftpServerId}
+                      canWrite={canAccessTab('filemanager')}
+                      borderColor={borderColor}
+                      contentBg=""
+                      textPrimary={textPrimary}
+                      textSecondary={textSecondary}
+                    />
+                  </div>
+                ) : null}
+                {fileManagerContent}
+              </>
+            )}
             {activeTab === 'backup' && canAccessTab('backup') && backupContent}
             {activeTab === 'gameconfig' && canAccessTab('gameconfig') && gameConfigContent}
             {/* no Terminal tab: a shell inside the game container is not offered in the panel */}

@@ -4,9 +4,10 @@ import path from 'node:path';
 import { getConfig } from '../config.js';
 import { docker } from '../utils/docker/client.js';
 import { logWarn } from '../utils/logger.js';
+import { serverRepository } from '../database/index.js';
 
 // FTP / FTPS / SFTP access to a server's files (gp-ftp.sh: SFTPGo in the container gamepanel-ftp).
-// One account per server (ftp<server number>), its home is the server's serverfiles folder. gp-ftp.sh leaves its
+// One account per server (ftp<server number>), its home is the server's game files (see homeSubdir). gp-ftp.sh leaves its
 // settings in the panel's data folder (ftp/ftp.json: the SFTPGo API on the panel's network and its admin login);
 // the panel keeps the accounts' passwords in ftp/accounts.json, so the server's settings can show them.
 
@@ -131,15 +132,33 @@ function newPassword(): string {
     return Array.from(crypto.randomBytes(12), (b) => chars[b % chars.length]).join('');
 }
 
-function sftpgoUser(config: FtpConfig, serverId: number, password: string) {
+// the account's folder: a LinuxGSM server's game files (serverfiles), for other games the server's whole data folder
+// (what the File Manager shows); files uploaded over FTP get the user the game runs as (LinuxGSM 1000, OVHcloud
+// images 10001, custom images their own), so the server can use them
+async function accountTarget(serverId: number): Promise<{ home: string; uid: number; gid: number }> {
+    const server = await serverRepository.findById(serverId);
+    let uid = 1000;
+    let gid = 1000;
+    try {
+        const runtime = JSON.parse(server?.runtime_config_json ?? '{}') as { volumeUid?: unknown; volumeGid?: unknown };
+        if (Number.isInteger(runtime.volumeUid) && Number.isInteger(runtime.volumeGid)) {
+            uid = Number(runtime.volumeUid);
+            gid = Number(runtime.volumeGid);
+        }
+    } catch {
+        // the default
+    }
+    return { home: server?.provider === 'linuxgsm' ? 'data/serverfiles' : 'data', uid, gid };
+}
+
+function sftpgoUser(config: FtpConfig, serverId: number, password: string, target: { home: string; uid: number; gid: number }) {
     return {
         username: ftpUsername(serverId),
         password,
         status: 1,
-        home_dir: path.posix.join(config.serversDir, String(serverId), 'data', 'serverfiles'),
-        // the game server's own user (LinuxGSM): files uploaded over FTP belong to it
-        uid: 1000,
-        gid: 1000,
+        home_dir: path.posix.join(config.serversDir, String(serverId), target.home),
+        uid: target.uid,
+        gid: target.gid,
         permissions: { '/': ['*'] },
         description: `Game Panel server ${serverId}`,
     };
@@ -158,7 +177,7 @@ export async function ensureFtpAccount(serverId: number, resetPassword = false):
     const key = String(serverId);
     const current = accounts[key];
     const password = !current || resetPassword ? newPassword() : current.password;
-    const user = sftpgoUser(config, serverId, password);
+    const user = sftpgoUser(config, serverId, password, await accountTarget(serverId));
     const existing = await api(config, 'GET', `/users/${user.username}`);
     if (existing.status === 404) await api(config, 'POST', '/users', user);
     else await api(config, 'PUT', `/users/${user.username}`, user);

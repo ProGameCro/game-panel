@@ -767,6 +767,7 @@ export function ServerSettingsModal({
       <ServerSettingsModalLayout
         isOpen={isOpen}
         onClose={onClose}
+        ftpServerId={serverId ?? null}
         serverName={serverName}
         serverProvider={serverProvider}
         modalBg={modalBg}

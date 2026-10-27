@@ -1095,9 +1095,7 @@ router.get('/ftp', async (_req: AuthenticatedRequest, res: Response) => {
             host: config?.host ?? null,
             ftpPort: config?.ftpPort ?? null,
             sftpPort: config?.sftpPort ?? null,
-            servers: servers
-                .filter((s) => s.provider === 'linuxgsm')
-                .map((s) => {
+            servers: servers.map((s) => {
                     const account = accounts.find((a) => a.serverId === s.id);
                     return { id: s.id, name: s.name, username: account?.username ?? null, password: account?.password ?? null };
                 }),

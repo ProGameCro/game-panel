@@ -177,4 +177,8 @@ if insert('frontend/utils/api.ts', 'async cod4Reinstall', '  async getCod4FilesS
           "    return response.data as { status: import('../components/serverSettings/Cod4ReinstallSection').Cod4ReinstallStatus | null };\n"
           "  }\n\n", after=False):
     changed.add('frontend')
+# the server's FTP access card in its File Manager tab (every game)
+if insert('frontend/components/ServerSettingsModal.tsx', 'ftpServerId=', "      <ServerSettingsModalLayout\n        isOpen={isOpen}\n        onClose={onClose}\n",
+          "        ftpServerId={serverId ?? null}\n"):
+    changed.add('frontend')
 print(' '.join(sorted(changed)))
