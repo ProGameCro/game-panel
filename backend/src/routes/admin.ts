@@ -16,7 +16,7 @@ import { backupServerConfigs, deleteBackup, listBackups, runAutoBackup, startAut
 import { checkCod4Files, cod4FilesDir, cod4FilesHostDir } from '../providers/linuxgsm/adapters/cod4/index.js';
 import { certificateInfo } from '../services/cod4/cert.js';
 import { writeBranding } from './branding.js';
-import { deleteGameIcon, saveGameIcon } from '../services/gameIcons.js';
+import { deleteGameIcon, forgetImportedIcon, getSteamImportStatus, saveGameIcon, scheduleFirstSteamIconImport, startSteamIconImport } from '../services/gameIcons.js';
 import { ensureFtpAccount, deleteFtpAccount, ftpRunning, kickFtpConnection, listFtpAccounts, listFtpConnections, readFtpConfig, readFtpEvents } from '../services/ftp.js';
 
 // Admin page (Super Admins): everything the panel can tell about the servers' add-ons (B3, FastDL), the host and what
@@ -26,6 +26,8 @@ router.use(authMiddleware, rootOnly);
 
 // daily backups (Admin → Backups); the backend loads this file at start
 startAutoBackupScheduler();
+// the games' icons from Steam, once after the first start
+scheduleFirstSteamIconImport();
 
 type Alert = { level: 'error' | 'warning'; text: string; serverId?: number };
 
@@ -1174,9 +1176,20 @@ router.get('/owners', async (_req: AuthenticatedRequest, res: Response) => {
 });
 
 // ---- game icons (left of the server names)
+// the official icons from Steam, for every game that has none yet (runs in the background; GET shows how far it is)
+router.post('/game-icons/steam', async (req: AuthenticatedRequest, res: Response) => {
+    res.locals.activityDetail = 'game icons from Steam';
+    return res.json(startSteamIconImport(Boolean(req.body?.force)));
+});
+
+router.get('/game-icons/steam', async (_req: AuthenticatedRequest, res: Response) => {
+    return res.json(getSteamImportStatus());
+});
+
 router.put('/game-icons/:key', async (req: AuthenticatedRequest, res: Response) => {
     try {
         await saveGameIcon(String(req.params.key), req.body?.dataUrl);
+        await forgetImportedIcon(String(req.params.key));
         res.locals.activityDetail = `game icon ${req.params.key}`;
         return res.json({ success: true });
     } catch (error) {
@@ -1187,6 +1200,7 @@ router.put('/game-icons/:key', async (req: AuthenticatedRequest, res: Response) 
 router.delete('/game-icons/:key', async (req: AuthenticatedRequest, res: Response) => {
     try {
         await deleteGameIcon(String(req.params.key));
+        await forgetImportedIcon(String(req.params.key));
         res.locals.activityDetail = `game icon ${req.params.key} removed`;
         return res.json({ success: true });
     } catch (error) {

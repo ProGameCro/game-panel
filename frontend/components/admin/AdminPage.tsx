@@ -13,6 +13,8 @@ import {
   Play,
   RefreshCw,
   RotateCw,
+  Save,
+  Image as ImageIcon,
   Server,
   Settings2,
   Square,
@@ -21,7 +23,7 @@ import {
 import { apiClient } from '../../utils/api';
 import type { AdminOverview } from '../../utils/api/types';
 import type { GameServer, ServerPlayers } from '../../types/gameServer';
-import { AppButton, AppCard } from '../../src/ui/components';
+import { AppCard } from '../../src/ui/components';
 import { ConfirmationModal } from '../ConfirmationModal';
 import { NewsEditor } from '../NewsPanel';
 import { usePanelName } from '../../contexts/BrandingContext';
@@ -36,7 +38,7 @@ import { AdminBackups } from './AdminBackups';
 import { AdminCod4Files } from './AdminCod4Files';
 import { AdminFtp } from './AdminFtp';
 import { AdminGameIcons } from './AdminGameIcons';
-import { ServerPicker, type Cod4Choice } from './shared';
+import { ActionButton, ServerPicker, type Cod4Choice } from './shared';
 
 // Admin page (Super Admins): every server at a glance with group actions, what needs attention, FastDL, the host,
 // and the panel's own settings. Server status, metrics and players come from the panel's live data (props);
@@ -250,11 +252,9 @@ export function AdminPage({ gameServers, serversPlayersById, gameNamesByKey, han
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-white">Admin</h1>
-        <AppButton tone="ghost" onClick={() => void load()}>
-          <span className="inline-flex items-center gap-2">
-            <RefreshCw className="h-4 w-4" /> Refresh
-          </span>
-        </AppButton>
+        <ActionButton onClick={() => void load()}>
+          <RefreshCw /> Refresh
+        </ActionButton>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -331,15 +331,15 @@ export function AdminPage({ gameServers, serversPlayersById, gameNamesByKey, han
               <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Game servers</h2>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-gray-400">{selected.size} selected</span>
-                <AppButton tone="ghost" disabled={selected.size === 0} onClick={() => setBulk('start')}>
-                  <span className="inline-flex items-center gap-1.5 text-green-400"><Play className="h-4 w-4" /> Start</span>
-                </AppButton>
-                <AppButton tone="ghost" disabled={selected.size === 0} onClick={() => setBulk('restart')}>
-                  <span className="inline-flex items-center gap-1.5 text-orange-400"><RotateCw className="h-4 w-4" /> Restart</span>
-                </AppButton>
-                <AppButton tone="ghost" disabled={selected.size === 0} onClick={() => setBulk('stop')}>
-                  <span className="inline-flex items-center gap-1.5 text-red-400"><Square className="h-4 w-4" /> Stop</span>
-                </AppButton>
+                <ActionButton tone="good" disabled={selected.size === 0} onClick={() => setBulk('start')}>
+                  <Play /> Start
+                </ActionButton>
+                <ActionButton tone="warn" disabled={selected.size === 0} onClick={() => setBulk('restart')}>
+                  <RotateCw /> Restart
+                </ActionButton>
+                <ActionButton tone="danger" disabled={selected.size === 0} onClick={() => setBulk('stop')}>
+                  <Square /> Stop
+                </ActionButton>
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -439,11 +439,9 @@ export function AdminPage({ gameServers, serversPlayersById, gameNamesByKey, han
                 <span className={fastdl.running ? 'text-emerald-300' : 'text-red-300'}>{fastdl.running ? '● web server running' : '● web server not running'}</span>
                 <span className={fastdl.serviceAlive ? 'text-emerald-300' : 'text-amber-300'}>{fastdl.serviceAlive ? '● sync service running' : '● sync service not running'}</span>
                 <span className="text-gray-400">{fastdl.lastSync ? `last sync ${new Date(fastdl.lastSync).toLocaleTimeString()}` : ''}</span>
-                <AppButton tone="ghost" onClick={() => void syncAll()} disabled={syncing}>
-                  <span className="inline-flex items-center gap-2">
-                    <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} /> {syncing ? 'Syncing…' : 'Sync all'}
-                  </span>
-                </AppButton>
+                <ActionButton tone="primary" onClick={() => void syncAll()} disabled={syncing}>
+                  <RefreshCw className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Syncing…' : 'Sync all'}
+                </ActionButton>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px]">
@@ -509,18 +507,15 @@ export function AdminPage({ gameServers, serversPlayersById, gameNamesByKey, han
           <AppCard className="p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Disk use by folder</h2>
-              <AppButton
-                tone="ghost"
+              <ActionButton
                 disabled={countingSizes}
                 onClick={() => {
                   setCountingSizes(true);
                   void load(true).finally(() => setCountingSizes(false));
                 }}
               >
-                <span className="inline-flex items-center gap-2">
-                  <HardDrive className="h-4 w-4" /> {countingSizes ? 'Counting…' : system?.sizes ? 'Count again' : 'Count'}
-                </span>
-              </AppButton>
+                <HardDrive /> {countingSizes ? 'Counting…' : system?.sizes ? 'Count again' : 'Count'}
+              </ActionButton>
             </div>
             {system?.sizes ? (
               <table className="w-full">
@@ -642,12 +637,12 @@ function PanelSettings({
         <p className="mb-3 text-sm text-gray-400">Shown instead of the OVHcloud Game Panel logo: sidebar, login page, browser tab.</p>
         <input value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={40} placeholder="OVHcloud Game Panel" className={field} />
         <div className="mt-3 flex flex-wrap gap-2">
-          <AppButton tone="primary" disabled={saving} onClick={() => void save(draft)}>
-            {saving ? 'Saving…' : 'Save'}
-          </AppButton>
-          <AppButton tone="ghost" disabled={saving} onClick={() => void save('')}>
-            Use the logo
-          </AppButton>
+          <ActionButton tone="good" disabled={saving} onClick={() => void save(draft)}>
+            <Save /> {saving ? 'Saving…' : 'Save'}
+          </ActionButton>
+          <ActionButton disabled={saving} onClick={() => void save('')}>
+            <ImageIcon /> Use the logo
+          </ActionButton>
         </div>
         {result && <p className={`mt-2 text-sm ${result.ok ? 'text-emerald-300' : 'text-red-300'}`}>{result.text}</p>}
       </AppCard>
@@ -688,8 +683,8 @@ function PanelSettings({
           className={field}
         />
         <div className="mt-3">
-          <AppButton
-            tone="primary"
+          <ActionButton
+            tone="good"
             onClick={() => {
               setLookResult(null);
               setAppearance({ defaultTheme: themeDraft, loginFooter: footerDraft })
@@ -697,8 +692,8 @@ function PanelSettings({
                 .catch((e) => setLookResult({ ok: false, text: errorText(e, 'Could not save.') }));
             }}
           >
-            Save
-          </AppButton>
+            <Save /> Save
+          </ActionButton>
         </div>
         {lookResult && <p className={`mt-2 text-sm ${lookResult.ok ? 'text-emerald-300' : 'text-red-300'}`}>{lookResult.text}</p>}
       </AppCard>
@@ -708,8 +703,8 @@ function PanelSettings({
           <Newspaper className="h-4 w-4" /> News
         </h2>
         <p className="mb-3 text-sm text-gray-400">The news bar above the server list. Users see it while there is news.</p>
-        <AppButton
-          tone="ghost"
+        <ActionButton
+          tone="primary"
           onClick={() => {
             void apiClient
               .getPanelNews()
@@ -718,8 +713,8 @@ function PanelSettings({
               .finally(() => setEditingNews(true));
           }}
         >
-          <span className="inline-flex items-center gap-2"><Newspaper className="h-4 w-4" /> Edit news</span>
-        </AppButton>
+          <Newspaper /> Edit news
+        </ActionButton>
         {editingNews && newsItems && (
           <NewsEditor
             items={newsItems}
@@ -734,9 +729,9 @@ function PanelSettings({
           <Users className="h-4 w-4" /> Users and Super Admins
         </h2>
         <p className="mb-3 text-sm text-gray-400">Create users, give them servers and permissions, make them Super Admins.</p>
-        <AppButton tone="ghost" onClick={() => setActiveTab('admin-users')}>
-          <span className="inline-flex items-center gap-2"><Users className="h-4 w-4" /> User Administration</span>
-        </AppButton>
+        <ActionButton tone="primary" onClick={() => setActiveTab('admin-users')}>
+          <Users /> User Administration
+        </ActionButton>
       </AppCard>
 
       <AppCard className="p-5">

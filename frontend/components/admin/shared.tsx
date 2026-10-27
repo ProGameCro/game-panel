@@ -52,6 +52,47 @@ export function Note({ result }: { result: { ok: boolean; text: string } | null 
   );
 }
 
+// tinted buttons with an icon (like Start / Stop / Reinstall in the server list), in two sizes
+const TONES = {
+  default: 'border-gray-600 bg-white/5 text-gray-200 hover:border-[var(--color-cyan-400)] hover:bg-[var(--color-cyan-400)]/10 hover:text-[var(--color-cyan-400)]',
+  primary: 'border-[var(--color-cyan-400)]/60 bg-[var(--color-cyan-400)]/15 text-[var(--color-cyan-400)] hover:bg-[var(--color-cyan-400)]/25',
+  good: 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200',
+  warn: 'border-amber-500/60 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 hover:text-amber-200',
+  danger: 'border-red-500/60 bg-red-500/15 text-red-300 hover:bg-red-500/25 hover:text-red-200',
+} as const;
+export type ButtonTone = keyof typeof TONES;
+
+export function ActionButton({
+  onClick,
+  disabled,
+  tone = 'default',
+  title,
+  size = 'md',
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: ButtonTone;
+  title?: string;
+  size?: 'sm' | 'md';
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg border font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:h-4 [&_svg]:w-4 ${
+        size === 'md' ? 'min-h-[2.375rem] px-4 py-2 text-sm' : 'min-h-[2rem] px-3 py-1.5 text-[0.8125rem]'
+      } ${TONES[tone]}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+// the small buttons of the Admin tabs: the same look, a bit smaller
 export function SmallButton({
   onClick,
   disabled,
@@ -65,22 +106,10 @@ export function SmallButton({
   title?: string;
   children: ReactNode;
 }) {
-  const colors =
-    tone === 'danger'
-      ? 'border-red-500/40 text-red-300 hover:border-red-400 hover:bg-red-500/10'
-      : tone === 'good'
-        ? 'border-emerald-500/40 text-emerald-300 hover:border-emerald-400 hover:bg-emerald-500/10'
-        : 'border-gray-600 text-gray-200 hover:border-[var(--color-cyan-400)] hover:text-[var(--color-cyan-400)]';
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${colors}`}
-    >
+    <ActionButton onClick={onClick} disabled={disabled} tone={tone} title={title} size="sm">
       {children}
-    </button>
+    </ActionButton>
   );
 }
 

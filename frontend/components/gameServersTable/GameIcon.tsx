@@ -74,9 +74,47 @@ export function Cod4Icon({ className = 'h-6 w-6' }: { className?: string }) {
   );
 }
 
+// Minecraft images (minecraft-paper-java21 ...) share one icon
+const familyKeyOf = (key: string): string => (key.startsWith('minecraft-') ? 'minecraft' : key);
+
+const BADGE_TEXT: Record<string, string> = {
+  minecraft: 'MC',
+  'counter-strike-2': 'CS2',
+  'garrys-mod': 'GM',
+  'project-zomboid': 'PZ',
+  hytale: 'HY',
+  palworld: 'PW',
+  valheim: 'VH',
+  rust: 'RU',
+};
+
+// every game without an icon gets a small coloured badge with its short name (the colour follows the name)
+export function GameBadge({ gameKey, className = 'h-6 w-6' }: { gameKey: string; className?: string }) {
+  const family = familyKeyOf(gameKey);
+  const text = BADGE_TEXT[family] ?? (family.length <= 4 ? family : family.slice(0, 3)).toUpperCase();
+  let hash = 0;
+  for (const ch of family) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  const hue = hash % 360;
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center justify-center rounded-md font-bold leading-none text-white ${className}`}
+      style={{
+        background: `linear-gradient(160deg, hsl(${hue} 55% 42%), hsl(${(hue + 30) % 360} 60% 26%))`,
+        fontSize: text.length >= 3 ? '0.5rem' : '0.625rem',
+        boxShadow: 'inset 0 0 0 1px rgb(255 255 255 / 0.18)',
+      }}
+      aria-hidden="true"
+    >
+      {text}
+    </span>
+  );
+}
+
 export function GameIcon({ server, className = 'h-6 w-6' }: { server: Pick<GameServer, 'game' | 'catalogId'>; className?: string }) {
   const icons = useGameIcons();
-  const custom = icons[gameKeyOf(server)];
+  const key = gameKeyOf(server);
+  const custom = icons[key] ?? icons[familyKeyOf(key)];
   if (custom) return <img src={`${API_BASE_URL}${custom}`} alt="" className={`shrink-0 rounded object-cover ${className}`} draggable={false} />;
-  return isCod4(server) ? <Cod4Icon className={className} /> : null;
+  if (isCod4(server)) return <Cod4Icon className={className} />;
+  return key ? <GameBadge gameKey={key} className={className} /> : null;
 }
