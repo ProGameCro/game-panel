@@ -220,9 +220,10 @@ export function ServerSettingsModalLayout({
               </div>
             )}
             {activeTab === 'filemanager' && canAccessTab('filemanager') && (
-              <>
+              // the FTP card on top, the files below take the rest of the height (and scroll in it)
+              <div className="flex h-full min-h-0 flex-col">
                 {ftpServerId ? (
-                  <div className="px-3 pt-3 sm:px-4 sm:pt-4 md:px-6 md:pt-6">
+                  <div className="shrink-0 px-3 pt-3 sm:px-4 sm:pt-4 md:px-6 md:pt-6">
                     <FtpSection
                       serverId={ftpServerId}
                       canWrite={canAccessTab('filemanager')}
@@ -230,11 +231,12 @@ export function ServerSettingsModalLayout({
                       contentBg=""
                       textPrimary={textPrimary}
                       textSecondary={textSecondary}
+                      collapsible
                     />
                   </div>
                 ) : null}
-                {fileManagerContent}
-              </>
+                <div className="min-h-0 flex-1 overflow-hidden">{fileManagerContent}</div>
+              </div>
             )}
             {activeTab === 'backup' && canAccessTab('backup') && backupContent}
             {activeTab === 'gameconfig' && canAccessTab('gameconfig') && gameConfigContent}

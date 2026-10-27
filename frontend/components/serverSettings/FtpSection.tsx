@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Eye, EyeOff, HardDriveUpload, KeyRound, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Copy, Eye, EyeOff, HardDriveUpload, KeyRound, Trash2 } from 'lucide-react';
 import { apiClient } from '../../utils/api';
 import { AppButton } from '../../src/ui/components';
 import { ConfirmationModal } from '../ConfirmationModal';
@@ -55,6 +55,7 @@ export function FtpSection({
   contentBg,
   textPrimary,
   textSecondary,
+  collapsible = false,
 }: {
   serverId: number;
   canWrite?: boolean;
@@ -62,7 +63,26 @@ export function FtpSection({
   contentBg: string;
   textPrimary: string;
   textSecondary: string;
+  // above the File Manager: folded to one line unless opened (the files need the room)
+  collapsible?: boolean;
 }) {
+  const [open, setOpen] = useState<boolean>(() => {
+    if (!collapsible) return true;
+    try {
+      return localStorage.getItem('gp-ftp-card-open') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    try {
+      localStorage.setItem('gp-ftp-card-open', next ? '1' : '0');
+    } catch {
+      // not remembered
+    }
+  };
   const [info, setInfo] = useState<FtpInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -96,10 +116,27 @@ export function FtpSection({
   const account = info?.account ?? null;
 
   return (
-    <section className={`mb-4 rounded-xl border ${borderColor} ${contentBg} p-4 sm:p-5`}>
-      <h3 className={`flex items-center gap-2 text-base font-semibold ${textPrimary}`}>
-        <HardDriveUpload className="h-4 w-4 text-sky-300" /> FTP access
-      </h3>
+    <section className={`${collapsible ? 'mb-3 p-3 sm:p-4' : 'mb-4 p-4 sm:p-5'} rounded-xl border ${borderColor} ${contentBg}`}>
+      {collapsible ? (
+        <button type="button" onClick={toggle} className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={open}>
+          <span className={`flex min-w-0 items-center gap-2 text-base font-semibold ${textPrimary}`}>
+            <HardDriveUpload className="h-4 w-4 shrink-0 text-sky-300" /> FTP access
+            {!open && account && (
+              <span className={`truncate font-mono text-xs font-normal ${textSecondary}`}>
+                {account.username} @ {info?.host} · FTP {info?.ftpPort} · SFTP {info?.sftpPort}
+              </span>
+            )}
+            {!open && info?.installed && !account && <span className={`text-xs font-normal ${textSecondary}`}>no account yet</span>}
+          </span>
+          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${textSecondary} ${open ? 'rotate-180' : ''}`} />
+        </button>
+      ) : (
+        <h3 className={`flex items-center gap-2 text-base font-semibold ${textPrimary}`}>
+          <HardDriveUpload className="h-4 w-4 text-sky-300" /> FTP access
+        </h3>
+      )}
+      {open && (
+      <>
       <p className={`mt-1 text-sm ${textSecondary}`}>
         Upload mods, maps and configs with FileZilla or any FTP / SFTP program. The account sees this server's files, the same as the File
         Manager below.
@@ -157,6 +194,9 @@ export function FtpSection({
             </div>
           )}
         </>
+      )}
+
+      </>
       )}
 
       <ConfirmationModal
